@@ -1,0 +1,26 @@
+---
+description: Стек React TypeScript Tailwind и Supabase
+alwaysApply: true
+---
+
+# Стек
+
+- Frontend: React + TypeScript, стили только Tailwind (без CSS-in-JS и отдельных CSS-модулей, кроме редкого исключения).
+- Backend/DB: Supabase — таблицы, RLS, Auth, Edge Functions. Не добавляй отдельный Nest/Express/Firebase.
+- Клиент БД: `@supabase/supabase-js`. Типы строк генерируй или держи рядом с таблицами, не используй `any` для строк БД.
+
+```ts
+// ❌ BAD
+const { data } = await supabase.from('tasks').select('*');
+data.map((row: any) => row.title);
+
+// ✅ GOOD
+const { data, error } = await supabase
+  .from('tasks')
+  .select('id, title, assignee_id, due_at, status, parent_id')
+  .returns<TaskRow[]>();
+if (error) throw error;
+```
+
+- Секреты (`SUPABASE_SERVICE_ROLE_KEY`, Telegram bot token) только в Edge Functions / env сервера, никогда в клиентском бандле.
+- UI-состояние доски — React; источник правды по задачам — Postgres, подписки через Realtime где нужен live-board.
