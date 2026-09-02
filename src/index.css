@@ -3,7 +3,40 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    @apply scroll-smooth;
+  }
+
   body {
-    @apply min-h-screen bg-slate-950 text-slate-100 antialiased;
+    @apply min-h-screen overflow-x-hidden bg-surface font-sans text-navy antialiased;
+    font-feature-settings: 'ss01' on, 'cv11' on;
+  }
+
+  ::selection {
+    @apply bg-accent text-white;
+  }
+}
+
+@layer utilities {
+  .text-gradient-orange {
+    @apply bg-gradient-to-r from-accent to-accent-light bg-clip-text text-transparent;
+  }
+
+  .underline-accent {
+    @apply relative inline-block;
+  }
+
+  .underline-accent::after {
+    content: '';
+    @apply absolute -bottom-1 left-0 h-1.5 w-full -rotate-1 rounded-full bg-accent;
+  }
+
+  .dot-grid {
+    background-image: radial-gradient(rgba(13, 27, 54, 0.14) 1px, transparent 1px);
+    background-size: 22px 22px;
+  }
+
+  .section-shell {
+    @apply mx-auto max-w-[1440px] px-4 sm:px-6 lg:px-10;
   }
 }
