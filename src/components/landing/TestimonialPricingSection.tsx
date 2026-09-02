@@ -44,8 +44,8 @@ export function TestimonialPricingSection() {
   return (
     <section id="тарифы" className="bg-surface py-24">
       <div className="section-shell">
-        <blockquote className="relative mb-24 overflow-hidden rounded-[2.5rem] bg-accent px-6 py-14 text-center shadow-button sm:px-12 sm:py-20">
-          <span aria-hidden="true" className="absolute left-8 top-2 text-[8rem] font-black leading-none text-white/20">“</span>
+        <blockquote className="relative mb-24 overflow-hidden rounded-[2.5rem] border border-navy/10 bg-surface-alt px-6 py-14 text-center shadow-card sm:px-12 sm:py-20">
+          <span aria-hidden="true" className="absolute left-8 top-2 text-[8rem] font-black leading-none text-navy/10">“</span>
           <p className="relative mx-auto mb-8 max-w-4xl text-3xl font-black leading-tight tracking-[-0.035em] text-navy sm:text-5xl">
             «Впервые наш инструмент для проектов ощущается как проактивный напарник — а не
             ещё одно место для отчётов»
@@ -69,7 +69,7 @@ export function TestimonialPricingSection() {
             Начните с малого. <OrangeUnderline>Стройте большое.</OrangeUnderline>
           </h2>
 
-          <div className="mt-8 inline-flex rounded-full border border-navy/10 bg-white p-1">
+          <div className="mt-8 inline-flex rounded-full border border-navy/10 bg-surface-alt p-1">
             <button
               type="button"
               onClick={() => setAnnual(false)}

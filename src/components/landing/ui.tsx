@@ -53,20 +53,41 @@ export function LogoIcon({ className = 'h-5 w-5' }: IconProps) {
 export function ButtonPrimary({
   children,
   className = '',
+  type = 'button',
+  onClick,
+  disabled = false,
 }: {
   children: ReactNode
   className?: string
+  type?: 'button' | 'submit' | 'reset'
+  onClick?: () => void
+  disabled?: boolean
 }) {
   return (
     <button
-      type="button"
-      className={`inline-flex items-center gap-2 rounded-full bg-accent px-5 py-3 text-sm font-black text-white shadow-button transition duration-200 hover:-translate-y-0.5 hover:bg-accent-light focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${className}`}
+      type={type}
+      onClick={onClick}
+      disabled={disabled}
+      className={`inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-accent to-accent-light px-5 py-3 text-sm font-black text-white shadow-button transition duration-200 hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 ${className}`}
     >
       {children}
     </button>
   )
 }
 
-export function OrangeUnderline({ children }: { children: ReactNode }) {
+export function OrangeUnderline({
+  children,
+  variant = 'dark',
+}: {
+  children: ReactNode
+  variant?: 'dark' | 'light'
+}) {
+  if (variant === 'light') {
+    return (
+      <span className="relative inline-block text-accent-light after:absolute after:-bottom-1 after:left-0 after:h-1.5 after:w-full after:-rotate-1 after:rounded-full after:bg-accent-light after:content-['']">
+        {children}
+      </span>
+    )
+  }
   return <span className="underline-accent text-accent">{children}</span>
 }

@@ -31,7 +31,7 @@ export function ResultsSection() {
         <div className="mb-8 grid gap-5 lg:grid-cols-2">
           <article className="rounded-4xl bg-navy-light p-8 lg:p-10">
             <h2 className="mb-5 text-4xl font-black leading-[1.02] tracking-tight text-white sm:text-5xl">
-              <OrangeUnderline>Больше</OrangeUnderline> результатов.
+              <OrangeUnderline variant="light">Больше</OrangeUnderline> результатов.
               <br />
               Меньше хаоса.
             </h2>
@@ -75,7 +75,7 @@ export function ResultsSection() {
             {steps.map((step) => (
               <article
                 key={step.num}
-                className="group relative rounded-3xl bg-white p-6 shadow-card transition hover:translate-x-2"
+                className="group relative rounded-3xl bg-surface p-6 shadow-card transition hover:translate-x-2"
               >
                 <span className="absolute right-5 top-5 text-accent">
                   <ArrowUpRightIcon className="h-4 w-4 rotate-90" />

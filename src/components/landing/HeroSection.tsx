@@ -29,10 +29,10 @@ function DashboardMockup() {
             </div>
           ))}
         </aside>
-        <div className="min-w-0 flex-1 bg-[#f4f2ec] p-5">
+        <div className="min-w-0 flex-1 bg-surface p-5">
           <div className="mb-3 flex items-center justify-between">
             <span className="text-xs font-semibold text-navy">Доска проекта</span>
-            <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-medium text-accent">
+            <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-medium text-accent">
               12 задач
             </span>
           </div>
@@ -80,7 +80,7 @@ export function HeroSection() {
             <h1 className="mb-7 text-[2.75rem] font-black leading-[.95] tracking-[-0.055em] text-white sm:text-6xl lg:text-[5rem]">
               Большие цели.
               <br />
-              <OrangeUnderline>Чёткие действия.</OrangeUnderline>
+              <OrangeUnderline variant="light">Чёткие действия.</OrangeUnderline>
             </h1>
 
             <p className="mb-9 max-w-xl text-base leading-relaxed text-white/60 sm:text-lg">
@@ -123,7 +123,7 @@ export function HeroSection() {
           </div>
 
           <div className="relative">
-            <div className="absolute -right-4 -top-4 h-40 w-40 rounded-full bg-accent/30 blur-3xl" />
+            <div className="absolute -right-4 -top-4 h-40 w-40 rounded-full bg-accent/25 blur-3xl" />
             <DashboardMockup />
           </div>
         </div>

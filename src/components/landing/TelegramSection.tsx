@@ -44,7 +44,7 @@ function PhoneMockup() {
 
 export function TelegramSection() {
   return (
-    <section className="bg-surface-alt py-24">
+    <section className="bg-surface py-24">
       <div className="section-shell grid items-center gap-10 lg:grid-cols-2 lg:gap-16">
         <div className="relative flex items-center justify-center">
           <div className="dot-grid absolute inset-0 rounded-4xl opacity-50" />
@@ -53,7 +53,7 @@ export function TelegramSection() {
           </div>
         </div>
 
-        <article className="rounded-[2.5rem] border border-navy/5 bg-white p-8 shadow-card lg:p-12">
+        <article className="rounded-[2.5rem] border border-navy/10 bg-surface p-8 shadow-card lg:p-12">
           <p className="mb-4 text-xs font-black uppercase tracking-[0.2em] text-accent">
             Telegram — ваш новый напарник
           </p>
