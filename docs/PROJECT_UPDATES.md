@@ -104,15 +104,11 @@ Vite подставляет `VITE_*` на этапе сборки.
 |------|----------|
 | Build command | `npm run build` |
 | Build output directory | `dist` |
-| Deploy command | **пусто** (рекомендуется) |
+| Deploy command | **пусто** (лучший вариант для Git → Pages) |
 
-Не используйте `npx wrangler deploy` — это команда для Workers, не для Pages.
+Cloudflare сам публикует папку `dist` после `npm run build`. Deploy command не нужен.
 
-Если поле Deploy command обязательно, укажите:
-
-```bash
-npm run pages:deploy
-```
+Если UI не даёт оставить поле пустым — `npm run pages:deploy` (wrangler в devDependencies).
 
 **Environment variables** (Production + Preview):
 
