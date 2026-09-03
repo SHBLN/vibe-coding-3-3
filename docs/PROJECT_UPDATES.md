@@ -94,14 +94,37 @@ VITE_SUPABASE_URL=...
 VITE_SUPABASE_ANON_KEY=...
 ```
 
-### Cloudflare Pages
+### Cloudflare Pages (GitHub)
 
-Vite подставляет `VITE_*` на этапе сборки. Для деплоя через Cloudflare:
+Vite подставляет `VITE_*` на этапе сборки.
 
-1. Локально: `.env.local` (не коммитится).
-2. На Cloudflare Pages: те же переменные в **Settings → Environment variables** (Production + Preview), затем redeploy.
-3. Или скрипт: `powershell -File scripts/sync-cloudflare-env.ps1` (нужен `npx wrangler login` или `CLOUDFLARE_API_TOKEN`).
-4. Прямой деплой dist: `powershell -File scripts/deploy-cloudflare.ps1`.
+**Build settings в Cloudflare Dashboard:**
+
+| Поле | Значение |
+|------|----------|
+| Build command | `npm run build` |
+| Build output directory | `dist` |
+| Deploy command | **пусто** (рекомендуется) |
+
+Не используйте `npx wrangler deploy` — это команда для Workers, не для Pages.
+
+Если поле Deploy command обязательно, укажите:
+
+```bash
+npm run pages:deploy
+```
+
+**Environment variables** (Production + Preview):
+
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+
+Локально: `.env.local` (не коммитится).
+
+Скрипты:
+
+- `powershell -File scripts/sync-cloudflare-env.ps1` — синхронизация env на Cloudflare
+- `powershell -File scripts/deploy-cloudflare.ps1` — локальная сборка и деплой
 
 ## Проверка
 - `npm run build` проходит успешно.
