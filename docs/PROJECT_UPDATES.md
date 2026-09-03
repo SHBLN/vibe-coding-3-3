@@ -108,7 +108,7 @@ Vite подставляет `VITE_*` на этапе сборки.
 
 Cloudflare сам публикует папку `dist` после `npm run build`. Deploy command не нужен.
 
-Если UI не даёт оставить поле пустым — `npm run pages:deploy` (wrangler в devDependencies).
+Если UI не даёт оставить поле пустым — `npm run pages:deploy`. В CI (переменная `CF_PAGES=1`) скрипт ничего не делает: Cloudflare сам публикует `dist`.
 
 **Environment variables** (Production + Preview):
 

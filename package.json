@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "pages:deploy": "wrangler pages deploy dist --project-name=vibe-coding-3"
+    "pages:deploy": "node scripts/pages-deploy.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",
