@@ -98,19 +98,15 @@ VITE_SUPABASE_ANON_KEY=...
 
 Vite подставляет `VITE_*` на этапе сборки.
 
-**Build settings в Cloudflare Dashboard:**
+**Build settings в Cloudflare Dashboard (Workers Builds):**
 
 | Поле | Значение |
 |------|----------|
 | Build command | `npm run build` |
-| Build output directory | `dist` |
-| Deploy command | **пусто** (лучший вариант для Git → Pages) |
+| Deploy command | `npx wrangler deploy` |
+| Build output directory | не нужен — см. `wrangler.toml` → `[assets].directory` |
 
-Cloudflare сам публикует папку `dist` после `npm run build`. Deploy command не нужен.
-
-Если UI не даёт оставить Deploy command пустым — `npm run pages:deploy` (no-op, только чтобы шаг прошёл).
-
-Ручной деплой с локальной машины: `powershell -File scripts/deploy-cloudflare.ps1`.
+`wrangler.toml` указывает `./dist` как папку статики. Deploy command **не** должен быть `dist` или пустым `wrangler pages deploy`.
 
 **Environment variables** (Production + Preview):
 
