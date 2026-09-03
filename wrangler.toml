@@ -1,4 +1,4 @@
-name = "vibe-coding-3"
+name = "vibe-coding-3-1"
 compatibility_date = "2025-09-03"
 
 # Cloudflare Workers Builds: wrangler deploy uploads static assets from dist/
