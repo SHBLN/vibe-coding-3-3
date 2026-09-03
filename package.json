@@ -1,5 +1,5 @@
 {
-  "name": "vibe-coding-3",
+  "name": "vibe-coding-3-2",
   "private": true,
   "version": "0.0.1",
   "type": "module",
@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "pages:deploy": "node scripts/pages-deploy.mjs"
+    "deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",

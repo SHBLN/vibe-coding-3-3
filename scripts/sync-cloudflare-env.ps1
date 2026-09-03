@@ -1,14 +1,18 @@
-# Sync VITE_* vars from .env.local to Cloudflare Pages (production + preview).
-# Auth: CLOUDFLARE_API_TOKEN (+ optional CLOUDFLARE_ACCOUNT_ID), or run `npx wrangler login` first.
+# Sync VITE_* build env vars to Cloudflare (Pages project API).
+# For Workers Builds (wrangler deploy): set variables in Cloudflare Dashboard manually.
+# Auth: CLOUDFLARE_API_TOKEN or `npx wrangler login`.
 
 param(
-  [string]$ProjectName = "vibe-coding-3",
+  [string]$ProjectName = "vibe-coding-3-2",
   [string]$EnvFile = ".env.local"
 )
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
+
+Write-Warning "Workers Builds: prefer Dashboard -> Settings -> Variables for VITE_* build env."
+Write-Warning "This script targets legacy Cloudflare Pages project API."
 
 if (-not (Test-Path $EnvFile)) {
   throw "Missing $EnvFile. Create it from .env.example."
@@ -81,4 +85,4 @@ if (-not $response.success) {
   throw "Cloudflare API error: $($response.errors | ConvertTo-Json -Compress)"
 }
 
-Write-Host "Environment variables updated. Redeploy the project to apply them to the build."
+Write-Host "Environment variables updated."

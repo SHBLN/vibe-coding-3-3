@@ -94,31 +94,27 @@ VITE_SUPABASE_URL=...
 VITE_SUPABASE_ANON_KEY=...
 ```
 
-### Cloudflare Pages (GitHub)
+### Cloudflare Workers Builds (GitHub)
 
 Vite подставляет `VITE_*` на этапе сборки.
 
-**Build settings в Cloudflare Dashboard (Workers Builds):**
+**Build settings в Cloudflare Dashboard:**
 
 | Поле | Значение |
 |------|----------|
 | Build command | `npm run build` |
 | Deploy command | `npx wrangler deploy` |
-| Build output directory | не нужен — см. `wrangler.toml` → `[assets].directory` |
 
-`wrangler.toml` указывает `./dist` как папку статики. Deploy command **не** должен быть `dist` или пустым `wrangler pages deploy`.
+Статика: `wrangler.toml` → `[assets].directory = "./dist"`, SPA: `not_found_handling = "single-page-application"`.
+
+**Не используйте:** `public/_redirects`, `wrangler pages deploy`, `npm run pages:deploy`, deploy command `dist`.
 
 **Environment variables** (Production + Preview):
 
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
 
-Локально: `.env.local` (не коммитится).
-
-Скрипты:
-
-- `powershell -File scripts/sync-cloudflare-env.ps1` — синхронизация env на Cloudflare
-- `powershell -File scripts/deploy-cloudflare.ps1` — локальная сборка и деплой
+Локально: `.env.local`. Деплой: `npm run deploy` или `powershell -File scripts/deploy-cloudflare.ps1`.
 
 ## Проверка
 - `npm run build` проходит успешно.

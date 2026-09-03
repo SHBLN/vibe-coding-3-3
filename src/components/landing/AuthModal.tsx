@@ -339,7 +339,9 @@ export function AuthModal({
 
   const handleLogin = async ({ email, password }: { email: string; password: string }) => {
     if (!isSupabaseConfigured()) {
-      setError('Supabase не настроен. Заполните VITE_SUPABASE_URL и VITE_SUPABASE_ANON_KEY в .env.local.')
+      setError(
+        'Supabase не настроен. Локально — .env.local; на Cloudflare — VITE_SUPABASE_URL и VITE_SUPABASE_ANON_KEY в Variables.',
+      )
       return
     }
 
@@ -373,7 +375,9 @@ export function AuthModal({
     role: string
   }) => {
     if (!isSupabaseConfigured()) {
-      setError('Supabase не настроен. Заполните VITE_SUPABASE_URL и VITE_SUPABASE_ANON_KEY в .env.local.')
+      setError(
+        'Supabase не настроен. Локально — .env.local; на Cloudflare — VITE_SUPABASE_URL и VITE_SUPABASE_ANON_KEY в Variables.',
+      )
       return
     }
 

@@ -1,6 +1,6 @@
-# Build with .env.local and deploy static dist/ to Cloudflare Pages.
+# Build with .env.local and deploy to Cloudflare Workers (static assets).
 param(
-  [string]$ProjectName = "vibe-coding-3"
+  [string]$WorkerName = "vibe-coding-3-2"
 )
 
 $ErrorActionPreference = "Stop"
@@ -14,7 +14,7 @@ if (-not (Test-Path ".env.local")) {
 Write-Host "Building production bundle..."
 npm run build
 
-Write-Host "Deploying to Cloudflare Pages project '$ProjectName'..."
-npx wrangler pages deploy dist --project-name=$ProjectName --commit-dirty=true
+Write-Host "Deploying Worker '$WorkerName' with static assets from dist/..."
+npx wrangler deploy
 
 Write-Host "Deploy finished."

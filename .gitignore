@@ -26,6 +26,9 @@ dist-ssr
 .env
 .env.local
 
+# Cloudflare local cache
+.wrangler/
+
 # Local reference clone (not part of the app)
 _reference_vibe-coding-2-1/
 
