@@ -94,6 +94,15 @@ VITE_SUPABASE_URL=...
 VITE_SUPABASE_ANON_KEY=...
 ```
 
+### Cloudflare Pages
+
+Vite подставляет `VITE_*` на этапе сборки. Для деплоя через Cloudflare:
+
+1. Локально: `.env.local` (не коммитится).
+2. На Cloudflare Pages: те же переменные в **Settings → Environment variables** (Production + Preview), затем redeploy.
+3. Или скрипт: `powershell -File scripts/sync-cloudflare-env.ps1` (нужен `npx wrangler login` или `CLOUDFLARE_API_TOKEN`).
+4. Прямой деплой dist: `powershell -File scripts/deploy-cloudflare.ps1`.
+
 ## Проверка
 - `npm run build` проходит успешно.
 - Авторизация и регистрация работают через Supabase.

@@ -1,0 +1,6 @@
+name = "vibe-coding-3"
+compatibility_date = "2025-09-03"
+pages_build_output_dir = "dist"
+
+[env.production]
+[env.preview]
