@@ -1,6 +1,6 @@
 # PROJECT UPDATES
 
-Дата обновления: 2026-09-02
+Дата обновления: 2026-09-07
 
 ## Что сделано
 
@@ -120,3 +120,16 @@ Vite подставляет `VITE_*` на этапе сборки.
 - `npm run build` проходит успешно.
 - Авторизация и регистрация работают через Supabase.
 - После логина отображается текущий аккаунт и статус входа.
+
+### 7) Google OAuth через Supabase
+- Добавлен вход через Google в `AuthModal` (кнопка «Войти через Google» во вкладке логина).
+- В `src/lib/auth.ts` добавлен метод `signInWithGoogle()` на базе `supabase.auth.signInWithOAuth`.
+- Для OAuth задан `redirectTo` на текущий origin приложения: `${window.location.origin}/`.
+- Ошибки/состояния загрузки для Google-входа интегрированы в общую логику модалки.
+- Обновлено сообщение о невалидной конфигурации Supabase для локального и Cloudflare-окружений.
+
+#### Что проверить в Supabase
+- Включен провайдер Google в Authentication → Providers.
+- В Redirect URLs добавлены:
+  - `http://localhost:5173/`
+  - Production-домен Cloudflare (например, `https://<your-domain>.pages.dev/`).
