@@ -63,9 +63,8 @@
 - Выполнен security fix: отозваны публичные `EXECUTE` права у `SECURITY DEFINER` функции.
 
 ### 6) Отображение авторизованного состояния
-- После входа пользователь видит:
-  - блок аккаунта в `Header` (имя, роль, аватар, кнопка выхода);
-  - приветственный баннер об успешном входе.
+- После входа пользователь перенаправляется на `/boards`.
+- На лендинге и доске отображается блок аккаунта в `Header` (имя, роль, аватар, кнопка выхода).
 - Добавлен хук `useAuth`:
   - чтение текущей сессии;
   - обновление профиля;
@@ -73,6 +72,10 @@
 
 ## Ключевые файлы
 - `src/App.tsx`
+- `src/main.tsx`
+- `src/pages/LandingPage.tsx`
+- `src/pages/BoardsPage.tsx`
+- `src/components/ProtectedRoute.tsx`
 - `src/components/landing/AuthModal.tsx`
 - `src/components/landing/AccountBadge.tsx`
 - `src/components/landing/Header.tsx`
@@ -84,6 +87,7 @@
 - `src/index.css`
 - `tailwind.config.js`
 - `.env.example`
+- `docs/PROJECT_UPDATES.md`
 
 ## Настройка окружения
 
@@ -119,17 +123,60 @@ Vite подставляет `VITE_*` на этапе сборки.
 ## Проверка
 - `npm run build` проходит успешно.
 - Авторизация и регистрация работают через Supabase.
-- После логина отображается текущий аккаунт и статус входа.
+- После логина пользователь попадает на `/boards`.
 
 ### 7) Google OAuth через Supabase
 - Добавлен вход через Google в `AuthModal` (кнопка «Войти через Google» во вкладке логина).
 - В `src/lib/auth.ts` добавлен метод `signInWithGoogle()` на базе `supabase.auth.signInWithOAuth`.
-- Для OAuth задан `redirectTo` на текущий origin приложения: `${window.location.origin}/`.
+- Для OAuth задан `redirectTo` на `${window.location.origin}/boards`.
 - Ошибки/состояния загрузки для Google-входа интегрированы в общую логику модалки.
 - Обновлено сообщение о невалидной конфигурации Supabase для локального и Cloudflare-окружений.
 
 #### Что проверить в Supabase
 - Включен провайдер Google в Authentication → Providers.
 - В Redirect URLs добавлены:
-  - `http://localhost:5173/`
-  - Production-домен Cloudflare (например, `https://<your-domain>.pages.dev/`).
+  - `http://localhost:5173/boards`
+  - Production-домен Cloudflare (например, `https://<your-domain>.pages.dev/boards`).
+
+### 8) Страница boards и post-login redirect
+- Подключён `react-router-dom`; приложение обёрнуто в `BrowserRouter` (`src/main.tsx`).
+- `App.tsx` стал контейнером маршрутов вместо монолитного лендинга.
+- Лендинг вынесен в `src/pages/LandingPage.tsx`.
+- Добавлена приватная страница `src/pages/BoardsPage.tsx` с базовым каркасом доски (колонки-заглушки).
+- Добавлен guard `src/components/ProtectedRoute.tsx`:
+  - авторизованный пользователь видит `/boards`;
+  - гость перенаправляется на `/`.
+- После успешного email/пароль логина и регистрации (без подтверждения email) пользователь попадает на `/boards`.
+- Google OAuth `redirectTo` обновлён на `${window.location.origin}/boards`.
+
+#### Маршруты
+| URL | Доступ | Описание |
+|-----|--------|----------|
+| `/` | публичный | лендинг с модалкой авторизации |
+| `/boards` | только авторизованные | доска задач (placeholder) |
+
+#### Поток после входа
+```mermaid
+flowchart LR
+  login[AuthModal login] --> refresh[refresh session]
+  refresh --> boards["/boards"]
+  google[Google OAuth] --> boards
+  guest["Guest opens /boards"] --> landing["Redirect to /"]
+```
+
+#### Новые и изменённые файлы
+- `src/main.tsx` — `BrowserRouter`
+- `src/App.tsx` — `Routes` (`/`, `/boards`)
+- `src/pages/LandingPage.tsx` — лендинг + `navigate('/boards')` после входа
+- `src/pages/BoardsPage.tsx` — страница доски
+- `src/components/ProtectedRoute.tsx` — guard по `useAuth`
+- `src/lib/auth.ts` — OAuth redirect на `/boards`
+- `package.json` — зависимость `react-router-dom`
+
+#### Проверка
+- `npm run build` проходит успешно.
+- Email login → редирект на `/boards`.
+- Google login → возврат на `/boards` (после добавления URL в Supabase Redirect URLs).
+- Прямой заход на `/boards` без сессии → редирект на `/`.
+- Выход с доски → возврат на лендинг `/`.
+- SPA fallback в `wrangler.toml` (`not_found_handling = "single-page-application"`) поддерживает client-side маршруты.

@@ -50,7 +50,7 @@ export async function signInWithEmail({ email, password }: LoginPayload) {
 
 function getOAuthRedirectTo() {
   if (typeof window === 'undefined') return undefined
-  return `${window.location.origin}/`
+  return `${window.location.origin}/boards`
 }
 
 export async function signInWithGoogle() {
