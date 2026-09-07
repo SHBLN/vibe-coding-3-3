@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
-import { signInWithEmail, signUpWithProfile } from '../../lib/auth'
+import { signInWithEmail, signInWithGoogle, signUpWithProfile } from '../../lib/auth'
 import { isSupabaseConfigured } from '../../lib/supabase'
 import { ButtonPrimary, LogoIcon } from './ui'
 
@@ -104,10 +104,12 @@ function AuthMessage({
 function LoginForm({
   loading,
   onSwitchToRegister,
+  onGoogleLogin,
   onSubmit,
 }: {
   loading: boolean
   onSwitchToRegister: () => void
+  onGoogleLogin: () => Promise<void>
   onSubmit: (payload: { email: string; password: string }) => Promise<void>
 }) {
   const formId = useId()
@@ -165,6 +167,21 @@ function LoginForm({
       <ButtonPrimary type="submit" disabled={loading} className="mt-2 w-full justify-center py-3.5">
         {loading ? 'Входим…' : 'Войти'}
       </ButtonPrimary>
+
+      <button
+        type="button"
+        onClick={() => void onGoogleLogin()}
+        disabled={loading}
+        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white px-4 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        <span
+          aria-hidden
+          className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 bg-white text-xs font-bold text-slate-700"
+        >
+          G
+        </span>
+        Войти через Google
+      </button>
 
       <p className="text-center text-sm text-slate-300">
         Нет аккаунта?{' '}
@@ -424,6 +441,28 @@ export function AuthModal({
     }
   }
 
+  const handleGoogleLogin = async () => {
+    if (!isSupabaseConfigured()) {
+      setError(
+        'Supabase не настроен. Локально — .env.local; на Cloudflare — VITE_SUPABASE_URL и VITE_SUPABASE_ANON_KEY в Variables.',
+      )
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+    setSuccess('Перенаправляем в Google...')
+
+    try {
+      await signInWithGoogle()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось выполнить вход через Google.')
+      setSuccess(null)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   if (!isOpen) return null
 
   return (
@@ -506,6 +545,7 @@ export function AuthModal({
             <LoginForm
               loading={loading}
               onSwitchToRegister={() => onTabChange('register')}
+              onGoogleLogin={handleGoogleLogin}
               onSubmit={handleLogin}
             />
           ) : (

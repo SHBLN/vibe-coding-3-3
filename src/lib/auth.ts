@@ -48,6 +48,26 @@ export async function signInWithEmail({ email, password }: LoginPayload) {
   return data
 }
 
+function getOAuthRedirectTo() {
+  if (typeof window === 'undefined') return undefined
+  return `${window.location.origin}/`
+}
+
+export async function signInWithGoogle() {
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: getOAuthRedirectTo(),
+    },
+  })
+
+  if (error) {
+    throw new Error(mapAuthError(error.message))
+  }
+
+  return data
+}
+
 export async function signUpWithProfile({
   email,
   password,
