@@ -4,10 +4,11 @@ import { useAuth } from '../hooks/useAuth'
 
 type ProtectedRouteProps = {
   children: ReactNode
+  requireCompleteProfile?: boolean
 }
 
-export function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { isAuthenticated, loading } = useAuth()
+export function ProtectedRoute({ children, requireCompleteProfile = true }: ProtectedRouteProps) {
+  const { isAuthenticated, profileComplete, loading } = useAuth()
 
   if (loading) {
     return (
@@ -19,6 +20,10 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   if (!isAuthenticated) {
     return <Navigate to="/" replace />
+  }
+
+  if (requireCompleteProfile && !profileComplete) {
+    return <Navigate to="/onboarding" replace />
   }
 
   return children

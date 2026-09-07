@@ -180,3 +180,39 @@ flowchart LR
 - Прямой заход на `/boards` без сессии → редирект на `/`.
 - Выход с доски → возврат на лендинг `/`.
 - SPA fallback в `wrangler.toml` (`not_found_handling = "single-page-application"`) поддерживает client-side маршруты.
+
+### 9) Обязательный выбор роли после Google OAuth
+- Добавлен post-auth onboarding для OAuth-пользователей:
+  - если профиль неполный, доступ к `/boards` блокируется;
+  - пользователь перенаправляется на `/onboarding`;
+  - после выбора роли и сохранения профиля перенаправляется обратно на `/boards`.
+- Обновлён `ProtectedRoute`:
+  - проверяет не только факт авторизации, но и `profileComplete`;
+  - поддерживает режим без проверки полноты профиля для `/onboarding`.
+- Добавлена страница `src/pages/OnboardingPage.tsx`:
+  - обязательный выбор роли из общего списка;
+  - сохранение `role` и `display_name` в `profiles` и `user_metadata`.
+- Список ролей вынесен в `src/lib/roles.ts` и переиспользуется в:
+  - `AuthModal` (email-регистрация),
+  - `OnboardingPage` (OAuth onboarding).
+- В `AuthModal` Google OAuth теперь доступен и в сценарии регистрации:
+  - во вкладке входа кнопка: «Войти или зарегистрироваться через Google»;
+  - во вкладке регистрации кнопка: «Зарегистрироваться через Google».
+
+#### Поток Google OAuth (актуальный)
+```mermaid
+flowchart TD
+  googleLogin[GoogleOAuthButton] --> oauth[SupabaseOAuth]
+  oauth --> boardsRoute[/boards]
+  boardsRoute --> profileCheck{profileComplete?}
+  profileCheck -->|no| onboardingRoute[/onboarding]
+  onboardingRoute --> updateProfile[Save role and displayName]
+  updateProfile --> boardsAccess[/boards]
+  profileCheck -->|yes| boardsAccess
+```
+
+#### Что проверить в Supabase для Google
+- Провайдер Google включён в Authentication → Providers.
+- В Redirect URLs добавлен URL:
+  - `http://localhost:5173/boards`
+  - production URL (например, `https://<your-domain>/boards`)

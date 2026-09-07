@@ -42,5 +42,6 @@ export function useAuth() {
     refresh,
     signOut,
     isAuthenticated: Boolean(account),
+    profileComplete: account?.profileComplete ?? false,
   }
 }

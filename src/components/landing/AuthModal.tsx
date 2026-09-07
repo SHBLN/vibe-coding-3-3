@@ -1,20 +1,10 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { signInWithEmail, signInWithGoogle, signUpWithProfile } from '../../lib/auth'
+import { IT_ROLES } from '../../lib/roles'
 import { isSupabaseConfigured } from '../../lib/supabase'
 import { ButtonPrimary, LogoIcon } from './ui'
 
 export type AuthTab = 'login' | 'register'
-
-const IT_ROLES = [
-  'Frontend разработчик',
-  'Backend разработчик',
-  'Fullstack разработчик',
-  'QA инженер',
-  'DevOps инженер',
-  'Product Manager',
-  'UI/UX дизайнер',
-  'Team Lead',
-] as const
 
 type AuthModalProps = {
   isOpen: boolean
@@ -180,7 +170,7 @@ function LoginForm({
         >
           G
         </span>
-        Войти через Google
+        Войти или зарегистрироваться через Google
       </button>
 
       <p className="text-center text-sm text-slate-300">
@@ -201,10 +191,12 @@ function LoginForm({
 function RegisterForm({
   loading,
   onSwitchToLogin,
+  onGoogleLogin,
   onSubmit,
 }: {
   loading: boolean
   onSwitchToLogin: () => void
+  onGoogleLogin: () => Promise<void>
   onSubmit: (payload: {
     displayName: string
     email: string
@@ -293,6 +285,21 @@ function RegisterForm({
       <ButtonPrimary type="submit" disabled={loading} className="mt-2 w-full justify-center py-3.5">
         {loading ? 'Создаём аккаунт…' : 'Создать аккаунт'}
       </ButtonPrimary>
+
+      <button
+        type="button"
+        onClick={() => void onGoogleLogin()}
+        disabled={loading}
+        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white px-4 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        <span
+          aria-hidden
+          className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 bg-white text-xs font-bold text-slate-700"
+        >
+          G
+        </span>
+        Зарегистрироваться через Google
+      </button>
 
       <p className="text-center text-sm text-slate-300">
         Уже есть аккаунт?{' '}
@@ -552,6 +559,7 @@ export function AuthModal({
             <RegisterForm
               loading={loading}
               onSwitchToLogin={() => onTabChange('login')}
+              onGoogleLogin={handleGoogleLogin}
               onSubmit={handleRegister}
             />
           )}

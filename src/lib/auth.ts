@@ -1,4 +1,7 @@
+import { DEFAULT_UNSELECTED_ROLE, isRoleSelected } from './roles'
 import { supabase } from './supabase'
+
+export { isRoleSelected } from './roles'
 
 export type ProfileRow = {
   id: string
@@ -135,6 +138,66 @@ export type AuthAccount = {
   email: string
   displayName: string
   role: string
+  profileComplete: boolean
+}
+
+export type UpdateProfilePayload = {
+  displayName?: string
+  role: string
+}
+
+export function isProfileComplete(profile: ProfileRow | null, role?: string | null): boolean {
+  const resolvedRole = profile?.role ?? role ?? null
+  return isRoleSelected(resolvedRole)
+}
+
+export async function updateProfile({ displayName, role }: UpdateProfilePayload) {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    throw new Error('Пользователь не авторизован.')
+  }
+
+  if (!isRoleSelected(role)) {
+    throw new Error('Выберите роль в команде.')
+  }
+
+  const existingProfile = await getCurrentProfile()
+  const resolvedDisplayName =
+    displayName?.trim() ||
+    existingProfile?.display_name ||
+    user.user_metadata?.display_name ||
+    user.email?.split('@')[0] ||
+    'Пользователь'
+
+  const profilePayload = {
+    id: user.id,
+    role,
+    display_name: resolvedDisplayName,
+  }
+
+  const { error: profileError } = existingProfile
+    ? await supabase.from('profiles').update(profilePayload).eq('id', user.id)
+    : await supabase.from('profiles').upsert(profilePayload, { onConflict: 'id' })
+
+  if (profileError) {
+    throw new Error(profileError.message)
+  }
+
+  const metadataUpdate: { role: string; display_name?: string } = { role }
+  if (displayName?.trim()) {
+    metadataUpdate.display_name = displayName.trim()
+  }
+
+  const { error: metadataError } = await supabase.auth.updateUser({
+    data: metadataUpdate,
+  })
+
+  if (metadataError) {
+    throw new Error(metadataError.message)
+  }
 }
 
 export async function getAuthAccount(): Promise<AuthAccount | null> {
@@ -145,12 +208,19 @@ export async function getAuthAccount(): Promise<AuthAccount | null> {
   if (!user) return null
 
   const profile = await getCurrentProfile()
+  const metadataRole = user.user_metadata?.role as string | undefined
+  const role = profile?.role ?? metadataRole ?? DEFAULT_UNSELECTED_ROLE
 
   return {
     id: user.id,
     email: user.email ?? '',
-    displayName: profile?.display_name ?? user.user_metadata?.display_name ?? user.email?.split('@')[0] ?? 'Пользователь',
-    role: profile?.role ?? user.user_metadata?.role ?? 'Team Member',
+    displayName:
+      profile?.display_name ??
+      user.user_metadata?.display_name ??
+      user.email?.split('@')[0] ??
+      'Пользователь',
+    role,
+    profileComplete: isProfileComplete(profile, role),
   }
 }
 
