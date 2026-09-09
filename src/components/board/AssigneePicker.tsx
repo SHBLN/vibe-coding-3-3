@@ -113,11 +113,11 @@ export function AssigneePicker({
 
       {isOpen ? (
         <div
-          className="absolute left-0 top-[calc(100%+6px)] z-30 w-72 overflow-hidden rounded-2xl border border-navy/10 bg-white shadow-hero"
+          className="absolute left-0 top-[calc(100%+6px)] z-30 w-80 overflow-hidden rounded-2xl border border-navy/10 bg-white shadow-hero"
           role="dialog"
           aria-label="Выбор исполнителя"
         >
-          <div className="space-y-3 border-b border-navy/10 p-3">
+          <div className="space-y-3 border-b border-navy/10 bg-surface/40 p-3">
             <div className="relative">
               <SearchIcon className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-navy/35" />
               <input
@@ -130,19 +130,36 @@ export function AssigneePicker({
               />
             </div>
 
-            <select
-              value={selectedRole ?? ''}
-              onChange={(event) => setSelectedRole(event.target.value || null)}
-              className="w-full rounded-xl border border-navy/10 bg-surface px-3 py-2 text-sm text-navy outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
-              aria-label="Фильтр по роли"
-            >
-              <option value="">Все роли</option>
-              {roles.map((role) => (
-                <option key={role} value={role}>
-                  {role}
-                </option>
-              ))}
-            </select>
+            <div className="space-y-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-navy/45">Роль</p>
+              <div className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1">
+                <button
+                  type="button"
+                  onClick={() => setSelectedRole(null)}
+                  className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold transition ${
+                    selectedRole === null
+                      ? 'border-accent/30 bg-accent/10 text-accent-dark'
+                      : 'border-navy/10 bg-white text-navy/60 hover:border-navy/20'
+                  }`}
+                >
+                  Все роли
+                </button>
+                {roles.map((role) => (
+                  <button
+                    key={role}
+                    type="button"
+                    onClick={() => setSelectedRole(role)}
+                    className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold transition ${
+                      selectedRole === role
+                        ? 'border-accent/30 bg-accent/10 text-accent-dark'
+                        : 'border-navy/10 bg-white text-navy/60 hover:border-navy/20'
+                    }`}
+                  >
+                    {role}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
           {profilesError ? (
@@ -150,6 +167,10 @@ export function AssigneePicker({
               {profilesError}
             </p>
           ) : null}
+
+          <div className="px-3 pt-2 text-[11px] text-navy/45">
+            Найдено: <span className="font-semibold text-navy/60">{filteredProfiles.length}</span>
+          </div>
 
           <ul id={listId} role="listbox" className="max-h-56 overflow-y-auto p-2">
             <li>

@@ -28,6 +28,7 @@ export type BoardViewData = {
   title: string
   description: string
   updatedAt: string
+  memberIds: string[]
   columns: BoardViewColumn[]
 }
 
@@ -37,6 +38,7 @@ const MOCK_BOARDS: Record<string, BoardViewData> = {
     title: 'Спринт 12',
     description: 'Фокус на Telegram-интеграции и roadmap по эпикам.',
     updatedAt: '2026-09-08T14:30:00.000Z',
+    memberIds: [],
     columns: [
       {
         id: 'col-todo',
@@ -135,6 +137,7 @@ const MOCK_BOARDS: Record<string, BoardViewData> = {
     title: 'Roadmap Q3',
     description: 'Эпики и вехи на третий квартал.',
     updatedAt: '2026-09-07T09:00:00.000Z',
+    memberIds: [],
     columns: [
       {
         id: 'col-todo-r',
@@ -186,6 +189,7 @@ const DEFAULT_MOCK_BOARD: Omit<BoardViewData, 'id'> = {
   title: 'Демо-доска',
   description: 'UI-only просмотр доски с мок-данными.',
   updatedAt: '2026-09-09T10:00:00.000Z',
+  memberIds: [],
   columns: MOCK_BOARDS['sprint-12'].columns,
 }
 

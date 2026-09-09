@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AssigneePicker } from '../components/board/AssigneePicker'
+import { BoardMembersPicker } from '../components/board/BoardMembersPicker'
 import { AccountBadge } from '../components/landing/AccountBadge'
 import { ButtonPrimary, LogoIcon } from '../components/landing/ui'
 import { useAuth } from '../hooks/useAuth'
@@ -173,6 +174,8 @@ type BoardViewContentProps = {
   columns: BoardViewColumn[]
   profiles: AssigneeProfile[]
   profilesError: string | null
+  boardMemberIds: string[]
+  onBoardMembersChange: (ids: string[]) => void
   onAssigneeChange: (taskId: string, assigneeId: string | null) => void
 }
 
@@ -181,6 +184,8 @@ function BoardViewContent({
   columns,
   profiles,
   profilesError,
+  boardMemberIds,
+  onBoardMembersChange,
   onAssigneeChange,
 }: BoardViewContentProps) {
   const totalTasks = columns.reduce((sum, column) => sum + column.tasks.length, 0)
@@ -211,6 +216,15 @@ function BoardViewContent({
             </p>
           ) : null}
         </div>
+
+        <div className="shrink-0">
+          <BoardMembersPicker
+            profiles={profiles}
+            profilesError={profilesError}
+            selectedMemberIds={boardMemberIds}
+            onChange={onBoardMembersChange}
+          />
+        </div>
       </div>
 
       <div className="-mx-4 overflow-x-auto px-4 pb-4 sm:-mx-6 sm:px-6 lg:-mx-10 lg:px-10">
@@ -238,12 +252,14 @@ export function BoardViewPage() {
   const initialBoard = boardId === 'not-found' ? null : getMockBoard(boardId)
 
   const [columns, setColumns] = useState<BoardViewColumn[]>(() => initialBoard?.columns ?? [])
+  const [boardMemberIds, setBoardMemberIds] = useState<string[]>(() => initialBoard?.memberIds ?? [])
   const [profiles, setProfiles] = useState<AssigneeProfile[]>([])
   const [profilesError, setProfilesError] = useState<string | null>(null)
 
   useEffect(() => {
     if (initialBoard) {
       setColumns(initialBoard.columns)
+      setBoardMemberIds(initialBoard.memberIds)
     }
   }, [initialBoard])
 
@@ -336,6 +352,8 @@ export function BoardViewPage() {
             columns={columns}
             profiles={profiles}
             profilesError={profilesError}
+            boardMemberIds={boardMemberIds}
+            onBoardMembersChange={setBoardMemberIds}
             onAssigneeChange={handleAssigneeChange}
           />
         ) : (

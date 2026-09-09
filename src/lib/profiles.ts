@@ -1,4 +1,5 @@
 import type { Tables } from './database.types'
+import { IT_ROLES } from './roles'
 import { supabase } from './supabase'
 
 export type ProfileRow = Tables<'profiles'>
@@ -37,8 +38,12 @@ export async function listProfiles(): Promise<AssigneeProfile[]> {
 }
 
 export function getUniqueRoles(profiles: AssigneeProfile[]): string[] {
-  const roles = new Set(profiles.map((profile) => profile.role).filter(Boolean))
-  return [...roles].sort((a, b) => a.localeCompare(b, 'ru'))
+  const profileRoles = profiles.map((profile) => profile.role).filter(Boolean)
+  const baseRoles = new Set<string>(IT_ROLES)
+  const additionalRoles = [...new Set(profileRoles)].filter((role) => !baseRoles.has(role))
+  additionalRoles.sort((a, b) => a.localeCompare(b, 'ru'))
+
+  return [...IT_ROLES, ...additionalRoles]
 }
 
 export function filterProfiles(
