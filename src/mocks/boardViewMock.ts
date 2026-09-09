@@ -1,0 +1,208 @@
+export type TaskStatus = 'todo' | 'in_progress' | 'done'
+
+export type TaskKind = 'task' | 'epic'
+
+export type BoardTask = {
+  id: string
+  title: string
+  status: TaskStatus
+  kind: TaskKind
+  assigneeId: string | null
+  /** Fallback для моков без реального profile id */
+  assigneeName?: string | null
+  assigneeInitials?: string | null
+  dueAt: string | null
+  parentTitle?: string
+  tags?: string[]
+}
+
+export type BoardViewColumn = {
+  id: string
+  title: string
+  status: TaskStatus
+  tasks: BoardTask[]
+}
+
+export type BoardViewData = {
+  id: string
+  title: string
+  description: string
+  updatedAt: string
+  columns: BoardViewColumn[]
+}
+
+const MOCK_BOARDS: Record<string, BoardViewData> = {
+  'sprint-12': {
+    id: 'sprint-12',
+    title: 'Спринт 12',
+    description: 'Фокус на Telegram-интеграции и roadmap по эпикам.',
+    updatedAt: '2026-09-08T14:30:00.000Z',
+    columns: [
+      {
+        id: 'col-todo',
+        title: 'К выполнению',
+        status: 'todo',
+        tasks: [
+          {
+            id: 'task-1',
+            title: 'Webhook Telegram с проверкой secret',
+            status: 'todo',
+            kind: 'task',
+            assigneeId: null,
+            assigneeName: 'Алексей К.',
+            assigneeInitials: 'АК',
+            dueAt: '2026-09-12T18:00:00.000Z',
+            parentTitle: 'Telegram-бот',
+            tags: ['backend', 'telegram'],
+          },
+          {
+            id: 'task-2',
+            title: 'Маппинг Telegram user ↔ профиль',
+            status: 'todo',
+            kind: 'task',
+            assigneeId: null,
+            assigneeName: 'Мария С.',
+            assigneeInitials: 'МС',
+            dueAt: '2026-09-10T18:00:00.000Z',
+            parentTitle: 'Telegram-бот',
+            tags: ['supabase'],
+          },
+          {
+            id: 'task-3',
+            title: 'Пустая колонка — демо состояния',
+            status: 'todo',
+            kind: 'task',
+            assigneeId: null,
+            assigneeName: null,
+            assigneeInitials: null,
+            dueAt: null,
+          },
+        ],
+      },
+      {
+        id: 'col-progress',
+        title: 'В работе',
+        status: 'in_progress',
+        tasks: [
+          {
+            id: 'task-4',
+            title: 'ИИ-разбиение глобальной задачи на подзадачи',
+            status: 'in_progress',
+            kind: 'task',
+            assigneeId: null,
+            assigneeName: 'Иван П.',
+            assigneeInitials: 'ИП',
+            dueAt: '2026-09-09T12:00:00.000Z',
+            parentTitle: 'AI Board',
+            tags: ['ai', 'edge-functions'],
+          },
+          {
+            id: 'task-5',
+            title: 'Roadmap: ось времени по due_at',
+            status: 'in_progress',
+            kind: 'task',
+            assigneeId: null,
+            assigneeName: 'Мария С.',
+            assigneeInitials: 'МС',
+            dueAt: '2026-09-15T18:00:00.000Z',
+            parentTitle: 'Roadmap v1',
+            tags: ['frontend'],
+          },
+        ],
+      },
+      {
+        id: 'col-done',
+        title: 'Готово',
+        status: 'done',
+        tasks: [
+          {
+            id: 'task-6',
+            title: 'Страница списка досок',
+            status: 'done',
+            kind: 'task',
+            assigneeId: null,
+            assigneeName: 'Алексей К.',
+            assigneeInitials: 'АК',
+            dueAt: '2026-09-05T18:00:00.000Z',
+            tags: ['frontend'],
+          },
+        ],
+      },
+    ],
+  },
+  'roadmap-q3': {
+    id: 'roadmap-q3',
+    title: 'Roadmap Q3',
+    description: 'Эпики и вехи на третий квартал.',
+    updatedAt: '2026-09-07T09:00:00.000Z',
+    columns: [
+      {
+        id: 'col-todo-r',
+        title: 'К выполнению',
+        status: 'todo',
+        tasks: [
+          {
+            id: 'epic-1',
+            title: 'Telegram-бот для постановки задач',
+            status: 'todo',
+            kind: 'epic',
+            assigneeId: null,
+            assigneeName: 'Алексей К.',
+            assigneeInitials: 'АК',
+            dueAt: '2026-09-30T18:00:00.000Z',
+            tags: ['epic', 'telegram'],
+          },
+        ],
+      },
+      {
+        id: 'col-progress-r',
+        title: 'В работе',
+        status: 'in_progress',
+        tasks: [
+          {
+            id: 'epic-2',
+            title: 'AI Board + распределение нагрузки',
+            status: 'in_progress',
+            kind: 'epic',
+            assigneeId: null,
+            assigneeName: 'Иван П.',
+            assigneeInitials: 'ИП',
+            dueAt: '2026-09-20T18:00:00.000Z',
+            tags: ['epic', 'ai'],
+          },
+        ],
+      },
+      {
+        id: 'col-done-r',
+        title: 'Готово',
+        status: 'done',
+        tasks: [],
+      },
+    ],
+  },
+}
+
+const DEFAULT_MOCK_BOARD: Omit<BoardViewData, 'id'> = {
+  title: 'Демо-доска',
+  description: 'UI-only просмотр доски с мок-данными.',
+  updatedAt: '2026-09-09T10:00:00.000Z',
+  columns: MOCK_BOARDS['sprint-12'].columns,
+}
+
+export function getMockBoard(boardId: string | undefined): BoardViewData | null {
+  if (!boardId) return null
+
+  const exact = MOCK_BOARDS[boardId]
+  if (exact) return exact
+
+  // UI-only fallback: любой id из списка досок открывает демо-контент
+  return {
+    ...DEFAULT_MOCK_BOARD,
+    id: boardId,
+    title: 'Демо-доска',
+  }
+}
+
+export function isKnownMockBoardId(boardId: string): boolean {
+  return boardId in MOCK_BOARDS
+}

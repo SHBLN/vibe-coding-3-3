@@ -528,7 +528,14 @@ export function BoardsPage() {
                         </p>
                       </div>
 
-                      <div className="flex shrink-0 gap-2">
+                      <div className="flex shrink-0 flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/boards/${selectedBoard.id}`)}
+                          className="rounded-full bg-navy px-4 py-2 text-xs font-bold text-white transition hover:bg-navy-light"
+                        >
+                          Открыть доску
+                        </button>
                         <button
                           type="button"
                           onClick={() => setIsEditOpen(true)}
