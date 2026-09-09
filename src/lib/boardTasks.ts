@@ -7,6 +7,7 @@ import {
   type BoardViewColumn,
   type BoardViewData,
   type TaskKind,
+  type TaskPriority,
   type TaskStatus,
 } from '../mocks/boardViewMock'
 
@@ -40,6 +41,15 @@ function parseTags(value: Json): string[] {
 
 function isTaskKind(value: string): value is TaskKind {
   return value === 'task' || value === 'epic'
+}
+
+function isTaskPriority(value: string): value is TaskPriority {
+  return value === 'low' || value === 'medium' || value === 'high'
+}
+
+function normalizeTaskPriority(value: string | null | undefined): TaskPriority {
+  if (value && isTaskPriority(value)) return value
+  return 'medium'
 }
 
 function slugifyStatusKey(title: string): string {
@@ -77,6 +87,8 @@ function mapTaskRow(row: TaskWithAssignees, parentTitles: Map<string, string>): 
     title: row.title,
     status: row.status,
     kind: isTaskKind(row.kind) ? row.kind : 'task',
+    priority: normalizeTaskPriority(row.priority),
+    description: row.description,
     assigneeId: assigneeIds[0] ?? null,
     assigneeIds,
     assigneeName: primaryName,
@@ -135,6 +147,8 @@ async function fetchTaskRows(boardId: string): Promise<TaskWithAssignees[]> {
       title,
       status,
       kind,
+      priority,
+      description,
       due_at,
       parent_id,
       position,
@@ -393,6 +407,8 @@ export type CreateTaskPayload = {
   columnId: string
   status: TaskStatus
   title: string
+  priority?: TaskPriority
+  description?: string | null
   dueAt?: string | null
   assigneeIds?: string[]
 }
@@ -401,6 +417,8 @@ export type UpdateTaskPayload = {
   taskId: string
   boardId: string
   title: string
+  priority?: TaskPriority
+  description?: string | null
   dueAt?: string | null
   assigneeIds?: string[]
 }
@@ -416,6 +434,8 @@ async function fetchTaskById(taskId: string, boardId: string): Promise<BoardTask
       title,
       status,
       kind,
+      priority,
+      description,
       due_at,
       parent_id,
       position,
@@ -465,7 +485,16 @@ async function normalizeColumnPositions(
 }
 
 export async function createTask(payload: CreateTaskPayload): Promise<BoardTask> {
-  const { boardId, columnId, status, title, dueAt = null, assigneeIds = [] } = payload
+  const {
+    boardId,
+    columnId,
+    status,
+    title,
+    priority = 'medium',
+    description = null,
+    dueAt = null,
+    assigneeIds = [],
+  } = payload
 
   const { count, error: countError } = await supabase
     .from('tasks')
@@ -483,6 +512,8 @@ export async function createTask(payload: CreateTaskPayload): Promise<BoardTask>
       title,
       status,
       kind: 'task',
+      priority,
+      description,
       due_at: dueAt,
       position: count ?? 0,
       tags: [] as Json,
@@ -501,12 +532,22 @@ export async function createTask(payload: CreateTaskPayload): Promise<BoardTask>
 }
 
 export async function updateTask(payload: UpdateTaskPayload): Promise<BoardTask> {
-  const { taskId, boardId, title, dueAt = null, assigneeIds = [] } = payload
+  const {
+    taskId,
+    boardId,
+    title,
+    priority = 'medium',
+    description = null,
+    dueAt = null,
+    assigneeIds = [],
+  } = payload
 
   const { error: updateError } = await supabase
     .from('tasks')
     .update({
       title,
+      priority,
+      description,
       due_at: dueAt,
     })
     .eq('id', taskId)

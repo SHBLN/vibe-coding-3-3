@@ -35,7 +35,23 @@ import {
   type BoardTask,
   type BoardViewColumn,
   type BoardViewData,
+  type TaskPriority,
 } from '../mocks/boardViewMock'
+
+const PRIORITY_BADGE: Record<TaskPriority, { label: string; className: string }> = {
+  low: {
+    label: 'Низкий',
+    className: 'bg-surface-alt text-navy/55',
+  },
+  medium: {
+    label: 'Средний',
+    className: 'bg-navy/8 text-navy/50',
+  },
+  high: {
+    label: 'Высокий',
+    className: 'bg-red-500/10 text-red-600',
+  },
+}
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('ru-RU', {
@@ -300,6 +316,8 @@ function TaskCard({
   const selectedAssigneeIds = task.assigneeIds ?? (task.assigneeId ? [task.assigneeId] : [])
   const fallbackAssigneeNames =
     task.assigneeNames ?? (task.assigneeName ? [task.assigneeName] : [])
+  const priorityBadge = PRIORITY_BADGE[task.priority]
+  const trimmedDescription = task.description?.trim() ?? ''
 
   return (
     <article
@@ -308,7 +326,7 @@ function TaskCard({
       onDragEnd={onDragEnd}
       onDragOver={(event) => onDragOver(event, columnId, task.id)}
       onDrop={(event) => onDrop(event, columnId, task.id)}
-      className={`group flex h-[210px] sm:h-[220px] flex-col overflow-hidden rounded-xl border bg-white p-4 shadow-sm transition ${
+      className={`group flex min-h-[210px] sm:min-h-[220px] flex-col overflow-hidden rounded-xl border bg-white p-4 shadow-sm transition ${
         isDragging
           ? 'cursor-grabbing border-accent/40 opacity-50 shadow-none'
           : 'hover-lift cursor-grab border-navy/10 hover:border-accent/30 hover:shadow-card'
@@ -328,6 +346,11 @@ function TaskCard({
             Эпик
           </span>
         ) : null}
+        <span
+          className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${priorityBadge.className}`}
+        >
+          {priorityBadge.label}
+        </span>
         {task.tags?.map((tag) => (
           <span
             key={tag}
@@ -360,17 +383,19 @@ function TaskCard({
         </div>
       </div>
 
-      <h4 className="line-clamp-2 min-h-[2.75rem] text-sm font-bold leading-snug text-navy">
+      <h4 className="line-clamp-2 text-sm font-bold leading-snug text-navy">
         {task.title}
       </h4>
 
-      <p
-        className={`mt-1.5 min-h-[1rem] text-xs ${
-          task.parentTitle ? 'text-navy/45' : 'select-none text-transparent'
-        }`}
-      >
-        {task.parentTitle ? `↳ ${task.parentTitle}` : '—'}
-      </p>
+      {trimmedDescription ? (
+        <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-navy/55">
+          {trimmedDescription}
+        </p>
+      ) : null}
+
+      {task.parentTitle ? (
+        <p className="mt-1.5 text-xs text-navy/45">↳ {task.parentTitle}</p>
+      ) : null}
 
       <div className="mt-auto grid min-h-9 grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
         <div className="min-w-0">
@@ -798,6 +823,8 @@ export function BoardViewPage() {
         title: values.title,
         status: column.statusKey,
         kind: 'task',
+        priority: values.priority,
+        description: values.description,
         assigneeId: values.assigneeIds[0] ?? null,
         assigneeIds: values.assigneeIds,
         assigneeName: primaryName,
@@ -941,6 +968,8 @@ export function BoardViewPage() {
             columnId: column.id,
             status: column.statusKey,
             title: values.title,
+            priority: values.priority,
+            description: values.description,
             dueAt: values.dueAt,
             assigneeIds: values.assigneeIds,
           })
@@ -980,6 +1009,8 @@ export function BoardViewPage() {
           taskId: task.id,
           boardId,
           title: values.title,
+          priority: values.priority,
+          description: values.description,
           dueAt: values.dueAt,
           assigneeIds: values.assigneeIds,
         })
@@ -1411,6 +1442,8 @@ export function BoardViewPage() {
         mode={taskForm?.mode ?? 'create'}
         columnTitle={taskForm ? findColumnById(taskForm.columnId)?.title : undefined}
         initialTitle={taskForm?.mode === 'edit' ? taskForm.task.title : ''}
+        initialPriority={taskForm?.mode === 'edit' ? taskForm.task.priority : 'medium'}
+        initialDescription={taskForm?.mode === 'edit' ? taskForm.task.description : null}
         initialDueAt={taskForm?.mode === 'edit' ? taskForm.task.dueAt : null}
         initialAssigneeIds={
           taskForm?.mode === 'edit'

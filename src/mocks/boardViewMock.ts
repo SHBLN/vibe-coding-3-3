@@ -5,11 +5,15 @@ export const DONE_STATUS_KEY = 'done'
 
 export type TaskKind = 'task' | 'epic'
 
+export type TaskPriority = 'low' | 'medium' | 'high'
+
 export type BoardTask = {
   id: string
   title: string
   status: TaskStatus
   kind: TaskKind
+  priority: TaskPriority
+  description: string | null
   /** Основной исполнитель для обратной совместимости со старым UI */
   assigneeId: string | null
   /** Множественные исполнители (UI-only), если нужно назначить нескольких */
@@ -61,6 +65,8 @@ const MOCK_BOARDS: Record<string, BoardViewData> = {
             title: 'Webhook Telegram с проверкой secret',
             status: 'backlog',
             kind: 'task',
+            priority: 'medium',
+            description: null,
             assigneeId: null,
             assigneeName: 'Алексей К.',
             assigneeInitials: 'АК',
@@ -73,6 +79,8 @@ const MOCK_BOARDS: Record<string, BoardViewData> = {
             title: 'Маппинг Telegram user ↔ профиль',
             status: 'backlog',
             kind: 'task',
+            priority: 'medium',
+            description: null,
             assigneeId: null,
             assigneeName: 'Мария С.',
             assigneeInitials: 'МС',
@@ -85,6 +93,8 @@ const MOCK_BOARDS: Record<string, BoardViewData> = {
             title: 'Пустая колонка — демо состояния',
             status: 'backlog',
             kind: 'task',
+            priority: 'medium',
+            description: null,
             assigneeId: null,
             assigneeName: null,
             assigneeInitials: null,
@@ -103,6 +113,8 @@ const MOCK_BOARDS: Record<string, BoardViewData> = {
             title: 'ИИ-разбиение глобальной задачи на подзадачи',
             status: 'in_progress',
             kind: 'task',
+            priority: 'medium',
+            description: null,
             assigneeId: null,
             assigneeName: 'Иван П.',
             assigneeInitials: 'ИП',
@@ -115,6 +127,8 @@ const MOCK_BOARDS: Record<string, BoardViewData> = {
             title: 'Roadmap: ось времени по due_at',
             status: 'in_progress',
             kind: 'task',
+            priority: 'medium',
+            description: null,
             assigneeId: null,
             assigneeName: 'Мария С.',
             assigneeInitials: 'МС',
@@ -142,6 +156,8 @@ const MOCK_BOARDS: Record<string, BoardViewData> = {
             title: 'Страница списка досок',
             status: 'done',
             kind: 'task',
+            priority: 'medium',
+            description: null,
             assigneeId: null,
             assigneeName: 'Алексей К.',
             assigneeInitials: 'АК',
@@ -170,6 +186,8 @@ const MOCK_BOARDS: Record<string, BoardViewData> = {
             title: 'Telegram-бот для постановки задач',
             status: 'backlog',
             kind: 'epic',
+            priority: 'medium',
+            description: null,
             assigneeId: null,
             assigneeName: 'Алексей К.',
             assigneeInitials: 'АК',
@@ -189,6 +207,8 @@ const MOCK_BOARDS: Record<string, BoardViewData> = {
             title: 'AI Board + распределение нагрузки',
             status: 'in_progress',
             kind: 'epic',
+            priority: 'medium',
+            description: null,
             assigneeId: null,
             assigneeName: 'Иван П.',
             assigneeInitials: 'ИП',

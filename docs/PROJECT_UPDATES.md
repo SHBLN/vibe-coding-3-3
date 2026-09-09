@@ -369,3 +369,40 @@ flowchart TD
 - `src/pages/OnboardingPage.tsx`
 - `src/components/board/BoardMembersPicker.tsx`
 - `src/components/landing/*`
+
+### 23) Приоритет и описание карточки
+- Применена миграция Supabase `add_task_priority_and_description`:
+  - `tasks.priority text NOT NULL DEFAULT 'medium'` с проверкой `low | medium | high`;
+  - `tasks.description text NULL`.
+- Существующие карточки получают `priority = 'medium'` автоматически.
+- Расширена модель карточки:
+  - тип `TaskPriority` в `src/mocks/boardViewMock.ts`;
+  - поля `priority` и `description` в `BoardTask`, `database.types.ts` и `boardTasks.ts`.
+- CRUD карточек сохраняет приоритет и описание в БД (`createTask`, `updateTask`).
+- Форма карточки (`TaskFormModal`):
+  - селект приоритета: Низкий / Средний / Высокий (дефолт — Средний);
+  - textarea описания (необязательно).
+- На карточке доски (`BoardViewPage` → `TaskCard`):
+  - бейдж приоритета в верхней строке (цвет зависит от уровня);
+  - превью описания до 2 строк под заголовком, если поле заполнено.
+- Карточки используют `min-h` вместо фиксированной высоты, чтобы контент с описанием не обрезался.
+
+#### Модель данных (tasks)
+| Поле | Тип | Значения / дефолт |
+|------|-----|-------------------|
+| `priority` | `text NOT NULL` | `low`, `medium` (default), `high` |
+| `description` | `text NULL` | произвольный текст или `NULL` |
+
+#### Ключевые файлы
+- `src/lib/boardTasks.ts`
+- `src/lib/database.types.ts`
+- `src/mocks/boardViewMock.ts`
+- `src/components/board/TaskFormModal.tsx`
+- `src/pages/BoardViewPage.tsx`
+- `docs/PROJECT_UPDATES.md`
+
+#### Проверка
+- `npm run build` проходит успешно.
+- Создание карточки с приоритетом «Высокий» и описанием → данные видны на карточке и в форме редактирования.
+- Редактирование приоритета/описания → изменения сохраняются в Supabase.
+- Перезагрузка страницы → значения подтягиваются из БД.

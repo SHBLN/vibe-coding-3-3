@@ -2,18 +2,29 @@ import { useEffect, useId, useState, type FormEvent } from 'react'
 import { AssigneePicker } from './AssigneePicker'
 import { ButtonPrimary } from '../landing/ui'
 import type { AssigneeProfile } from '../../lib/profiles'
+import type { TaskPriority } from '../../mocks/boardViewMock'
 
 export type TaskFormValues = {
   title: string
+  priority: TaskPriority
+  description: string | null
   dueAt: string | null
   assigneeIds: string[]
 }
+
+const PRIORITY_OPTIONS: Array<{ value: TaskPriority; label: string }> = [
+  { value: 'low', label: 'Низкий' },
+  { value: 'medium', label: 'Средний' },
+  { value: 'high', label: 'Высокий' },
+]
 
 type TaskFormModalProps = {
   isOpen: boolean
   mode: 'create' | 'edit'
   columnTitle?: string
   initialTitle?: string
+  initialPriority?: TaskPriority
+  initialDescription?: string | null
   initialDueAt?: string | null
   initialAssigneeIds?: string[]
   profiles: AssigneeProfile[]
@@ -55,6 +66,8 @@ export function TaskFormModal({
   mode,
   columnTitle,
   initialTitle = '',
+  initialPriority = 'medium',
+  initialDescription = null,
   initialDueAt = null,
   initialAssigneeIds = [],
   profiles,
@@ -64,6 +77,8 @@ export function TaskFormModal({
 }: TaskFormModalProps) {
   const formId = useId()
   const [title, setTitle] = useState(initialTitle)
+  const [priority, setPriority] = useState<TaskPriority>(initialPriority)
+  const [description, setDescription] = useState(initialDescription ?? '')
   const [dueAtLocal, setDueAtLocal] = useState(toDatetimeLocalValue(initialDueAt))
   const [assigneeIds, setAssigneeIds] = useState<string[]>(initialAssigneeIds)
   const [submitting, setSubmitting] = useState(false)
@@ -72,11 +87,13 @@ export function TaskFormModal({
   useEffect(() => {
     if (!isOpen) return
     setTitle(initialTitle)
+    setPriority(initialPriority)
+    setDescription(initialDescription ?? '')
     setDueAtLocal(toDatetimeLocalValue(initialDueAt))
     setAssigneeIds(initialAssigneeIds)
     setError(null)
     setSubmitting(false)
-  }, [isOpen, initialTitle, initialDueAt, initialAssigneeIds])
+  }, [isOpen, initialTitle, initialPriority, initialDescription, initialDueAt, initialAssigneeIds])
 
   useEffect(() => {
     if (!isOpen) return
@@ -106,8 +123,12 @@ export function TaskFormModal({
 
     setSubmitting(true)
     try {
+      const trimmedDescription = description.trim()
+
       await onSubmit({
         title: trimmedTitle,
+        priority,
+        description: trimmedDescription ? trimmedDescription : null,
         dueAt: fromDatetimeLocalValue(dueAtLocal),
         assigneeIds,
       })
@@ -181,6 +202,40 @@ export function TaskFormModal({
               disabled={submitting}
               autoFocus
               className="w-full rounded-2xl border border-navy/15 bg-surface px-4 py-3 text-sm text-navy outline-none transition placeholder:text-navy/40 focus:border-accent focus:ring-2 focus:ring-accent/20 disabled:cursor-not-allowed disabled:opacity-60"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor={`${formId}-priority`} className="block text-sm font-semibold text-navy">
+              Приоритет
+            </label>
+            <select
+              id={`${formId}-priority`}
+              value={priority}
+              onChange={(event) => setPriority(event.target.value as TaskPriority)}
+              disabled={submitting}
+              className="w-full rounded-2xl border border-navy/15 bg-surface px-4 py-3 text-sm text-navy outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {PRIORITY_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor={`${formId}-description`} className="block text-sm font-semibold text-navy">
+              Описание <span className="font-normal text-navy/45">(необязательно)</span>
+            </label>
+            <textarea
+              id={`${formId}-description`}
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              placeholder="Детали, контекст, ссылки…"
+              rows={4}
+              disabled={submitting}
+              className="w-full resize-y rounded-2xl border border-navy/15 bg-surface px-4 py-3 text-sm text-navy outline-none transition placeholder:text-navy/40 focus:border-accent focus:ring-2 focus:ring-accent/20 disabled:cursor-not-allowed disabled:opacity-60"
             />
           </div>
 

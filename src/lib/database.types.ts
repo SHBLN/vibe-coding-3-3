@@ -141,11 +141,13 @@ export type Database = {
           board_id: string
           column_id: string
           created_at: string
+          description: string | null
           due_at: string | null
           id: string
           kind: string
           parent_id: string | null
           position: number
+          priority: string
           status: string
           tags: Json
           title: string
@@ -155,11 +157,13 @@ export type Database = {
           board_id: string
           column_id: string
           created_at?: string
+          description?: string | null
           due_at?: string | null
           id?: string
           kind?: string
           parent_id?: string | null
           position?: number
+          priority?: string
           status: string
           tags?: Json
           title: string
@@ -169,11 +173,13 @@ export type Database = {
           board_id?: string
           column_id?: string
           created_at?: string
+          description?: string | null
           due_at?: string | null
           id?: string
           kind?: string
           parent_id?: string | null
           position?: number
+          priority?: string
           status?: string
           tags?: Json
           title?: string
