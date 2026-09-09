@@ -100,6 +100,106 @@ export type Database = {
         }
         Relationships: []
       }
+      task_assignees: {
+        Row: {
+          created_at: string
+          profile_id: string
+          task_id: string
+        }
+        Insert: {
+          created_at?: string
+          profile_id: string
+          task_id: string
+        }
+        Update: {
+          created_at?: string
+          profile_id?: string
+          task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'task_assignees_profile_id_fkey'
+            columns: ['profile_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'task_assignees_task_id_fkey'
+            columns: ['task_id']
+            isOneToOne: false
+            referencedRelation: 'tasks'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      tasks: {
+        Row: {
+          board_id: string
+          column_id: string
+          created_at: string
+          due_at: string | null
+          id: string
+          kind: string
+          parent_id: string | null
+          position: number
+          status: string
+          tags: Json
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          board_id: string
+          column_id: string
+          created_at?: string
+          due_at?: string | null
+          id?: string
+          kind?: string
+          parent_id?: string | null
+          position?: number
+          status: string
+          tags?: Json
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          board_id?: string
+          column_id?: string
+          created_at?: string
+          due_at?: string | null
+          id?: string
+          kind?: string
+          parent_id?: string | null
+          position?: number
+          status?: string
+          tags?: Json
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'tasks_board_id_fkey'
+            columns: ['board_id']
+            isOneToOne: false
+            referencedRelation: 'boards'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'tasks_column_id_fkey'
+            columns: ['column_id']
+            isOneToOne: false
+            referencedRelation: 'board_columns'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'tasks_parent_id_fkey'
+            columns: ['parent_id']
+            isOneToOne: false
+            referencedRelation: 'tasks'
+            referencedColumns: ['id']
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

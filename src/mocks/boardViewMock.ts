@@ -7,9 +7,14 @@ export type BoardTask = {
   title: string
   status: TaskStatus
   kind: TaskKind
+  /** Основной исполнитель для обратной совместимости со старым UI */
   assigneeId: string | null
+  /** Множественные исполнители (UI-only), если нужно назначить нескольких */
+  assigneeIds?: string[]
   /** Fallback для моков без реального profile id */
   assigneeName?: string | null
+  /** Fallback для множественного назначения */
+  assigneeNames?: string[]
   assigneeInitials?: string | null
   dueAt: string | null
   parentTitle?: string
