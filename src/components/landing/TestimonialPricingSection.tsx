@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { CheckIcon, OrangeUnderline } from './ui'
 
 const plans = [
@@ -40,11 +40,31 @@ const plans = [
 
 export function TestimonialPricingSection() {
   const [annual, setAnnual] = useState(true)
+  const pricingGridRef = useRef<HTMLDivElement>(null)
+  const [isPricingVisible, setIsPricingVisible] = useState(false)
+
+  useEffect(() => {
+    const target = pricingGridRef.current
+    if (!target || isPricingVisible) return
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          setIsPricingVisible(true)
+          observer.disconnect()
+        }
+      },
+      { threshold: 0.2 },
+    )
+
+    observer.observe(target)
+    return () => observer.disconnect()
+  }, [isPricingVisible])
 
   return (
     <section id="тарифы" className="bg-surface py-24">
       <div className="section-shell">
-        <blockquote className="relative mb-24 overflow-hidden rounded-[2.5rem] border border-navy/10 bg-surface-alt px-6 py-14 text-center shadow-card sm:px-12 sm:py-20">
+        <blockquote className="panel-shell relative mb-24 overflow-hidden bg-surface-alt px-6 py-14 text-center sm:px-12 sm:py-20">
           <span aria-hidden="true" className="absolute left-8 top-2 text-[8rem] font-black leading-none text-navy/10">“</span>
           <p className="relative mx-auto mb-8 max-w-4xl text-3xl font-black leading-tight tracking-[-0.035em] text-navy sm:text-5xl">
             «Впервые наш инструмент для проектов ощущается как проактивный напарник — а не
@@ -69,11 +89,11 @@ export function TestimonialPricingSection() {
             Начните с малого. <OrangeUnderline>Стройте большое.</OrangeUnderline>
           </h2>
 
-          <div className="mt-8 inline-flex rounded-full border border-navy/10 bg-surface-alt p-1">
+          <div className="mt-8 inline-flex rounded-xl border border-navy/10 bg-surface-alt p-1">
             <button
               type="button"
               onClick={() => setAnnual(false)}
-              className={`rounded-full px-5 py-2 text-sm font-semibold transition ${
+              className={`rounded-lg px-5 py-2 text-sm font-semibold transition ${
                 !annual ? 'bg-navy text-white' : 'text-navy/60 hover:text-navy'
               }`}
             >
@@ -82,7 +102,7 @@ export function TestimonialPricingSection() {
             <button
               type="button"
               onClick={() => setAnnual(true)}
-              className={`rounded-full px-5 py-2 text-sm font-semibold transition ${
+              className={`rounded-lg px-5 py-2 text-sm font-semibold transition ${
                 annual ? 'bg-navy text-white' : 'text-navy/60 hover:text-navy'
               }`}
             >
@@ -92,13 +112,18 @@ export function TestimonialPricingSection() {
           </div>
         </div>
 
-        <div className="grid gap-5 md:grid-cols-3">
-          {plans.map((plan) => (
+        <div ref={pricingGridRef} className="grid gap-5 md:grid-cols-3">
+          {plans.map((plan, index) => (
             <article
               key={plan.name}
-              className={`relative flex min-h-[450px] flex-col rounded-[2.5rem] p-8 shadow-hero transition duration-300 hover:-translate-y-2 ${
-                plan.popular ? 'bg-navy-light ring-4 ring-accent' : 'bg-navy'
-              }`}
+              className={`relative flex min-h-[450px] flex-col rounded-2xl border p-8 shadow-card transition duration-300 hover:-translate-y-2 ${
+                plan.popular ? 'border-accent/50 bg-navy-light ring-2 ring-accent/50' : 'border-navy/10 bg-navy'
+              } ${isPricingVisible ? 'motion-stagger' : 'opacity-0 translate-y-2'}`}
+              style={
+                isPricingVisible
+                  ? ({ '--stagger-delay': `${index * 55}ms` } as CSSProperties)
+                  : undefined
+              }
             >
               {plan.popular && (
                 <span className="absolute right-6 top-6 text-[10px] font-bold uppercase tracking-wider text-accent">

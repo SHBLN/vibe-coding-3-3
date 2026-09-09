@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type CSSProperties, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AccountBadge } from '../components/landing/AccountBadge'
 import { ButtonPrimary, LogoIcon } from '../components/landing/ui'
@@ -419,9 +419,14 @@ export function BoardsPage() {
     )
   }
 
+  const totalCards = boards.reduce(
+    (sum, board) => sum + board.columns.reduce((colSum, column) => colSum + column.cards.length, 0),
+    0,
+  )
+
   return (
-    <div className="min-h-screen bg-surface">
-      <header className="border-b border-navy/10 bg-surface">
+    <div className="min-h-screen bg-gradient-to-b from-surface to-surface-alt">
+      <header className="sticky top-0 z-30 border-b border-navy/10 bg-surface/95 backdrop-blur">
         <div className="section-shell flex h-20 items-center justify-between">
           <a
             href="/"
@@ -440,13 +445,18 @@ export function BoardsPage() {
         </div>
       </header>
 
-      <main className="section-shell py-10">
+      <main className="section-shell py-8">
         <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="text-3xl font-black tracking-[-0.04em] text-navy">Доски задач</h1>
             <p className="mt-2 text-navy/60">
               Добро пожаловать, {account.displayName}. Управляйте досками команды.
             </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <span className="chip">Досок: {boards.length}</span>
+              <span className="chip">Карточек: {totalCards}</span>
+              <span className="chip">Профиль: {account.role}</span>
+            </div>
           </div>
           <ButtonPrimary onClick={() => setIsCreateOpen(true)} className="shrink-0">
             + Создать доску
@@ -463,7 +473,7 @@ export function BoardsPage() {
         ) : null}
 
         {boards.length === 0 ? (
-          <div className="rounded-4xl border border-dashed border-navy/15 bg-surface-alt px-8 py-16 text-center">
+          <div className="panel-shell border-dashed bg-surface px-8 py-16 text-center">
             <h2 className="text-xl font-black text-navy">Пока нет досок</h2>
             <p className="mx-auto mt-2 max-w-sm text-sm text-navy/60">
               Создайте первую доску, чтобы начать работу с колонками и карточками.
@@ -473,13 +483,13 @@ export function BoardsPage() {
             </ButtonPrimary>
           </div>
         ) : (
-          <div className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
-            <aside className="space-y-3">
+          <div className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
+            <aside className="motion-fade-in panel-shell space-y-3 p-4">
               <h2 className="px-1 text-xs font-bold uppercase tracking-wide text-navy/50">
                 Ваши доски
               </h2>
               <ul className="space-y-2">
-                {boards.map((board) => {
+                {boards.map((board, boardIndex) => {
                   const isSelected = board.id === selectedBoardId
                   const cardCount = board.columns.reduce((sum, column) => sum + column.cards.length, 0)
 
@@ -488,11 +498,12 @@ export function BoardsPage() {
                       <button
                         type="button"
                         onClick={() => setSelectedBoardId(board.id)}
-                        className={`group w-full rounded-3xl border p-4 text-left shadow-sm transition ${
+                        className={`motion-stagger hover-lift group w-full rounded-2xl border p-4 text-left shadow-sm ${
                           isSelected
                             ? 'border-accent/40 bg-white shadow-card'
-                            : 'border-navy/10 bg-surface-alt hover:border-navy/20 hover:bg-white'
+                            : 'border-navy/10 bg-surface hover:border-navy/20 hover:bg-white'
                         }`}
+                        style={{ '--stagger-delay': `${boardIndex * 55}ms` } as CSSProperties}
                       >
                         <h3 className="text-sm font-black text-navy">{board.title}</h3>
                         {board.description ? (
@@ -511,7 +522,7 @@ export function BoardsPage() {
             <section className="min-w-0">
               {selectedBoard ? (
                 <div className="space-y-6">
-                  <div className="rounded-4xl border border-navy/10 bg-white p-6 shadow-sm">
+                  <div className="motion-fade-in panel-shell p-6">
                     <div className="flex flex-wrap items-start justify-between gap-4">
                       <div className="min-w-0">
                         <h2 className="text-2xl font-black tracking-tight text-navy">
@@ -532,21 +543,21 @@ export function BoardsPage() {
                         <button
                           type="button"
                           onClick={() => navigate(`/boards/${selectedBoard.id}`)}
-                          className="rounded-full bg-navy px-4 py-2 text-xs font-bold text-white transition hover:bg-navy-light"
+                          className="press-down rounded-xl bg-navy px-4 py-2 text-xs font-bold text-white hover:bg-navy-light"
                         >
                           Открыть доску
                         </button>
                         <button
                           type="button"
                           onClick={() => setIsEditOpen(true)}
-                          className="rounded-full border border-navy/10 px-4 py-2 text-xs font-bold text-navy/70 transition hover:border-accent hover:text-accent"
+                          className="press-down rounded-xl border border-navy/10 bg-white px-4 py-2 text-xs font-bold text-navy/70 hover:border-accent hover:text-accent"
                         >
                           Изменить
                         </button>
                         <button
                           type="button"
                           onClick={() => setBoardToDelete(selectedBoard)}
-                          className="rounded-full border border-red-200 px-4 py-2 text-xs font-bold text-red-600 transition hover:border-red-400 hover:bg-red-50"
+                          className="press-down rounded-xl border border-red-200 bg-white px-4 py-2 text-xs font-bold text-red-600 hover:border-red-400 hover:bg-red-50"
                         >
                           Удалить
                         </button>
@@ -555,10 +566,11 @@ export function BoardsPage() {
                   </div>
 
                   <div className="grid gap-4 md:grid-cols-3">
-                    {selectedBoard.columns.map((column) => (
+                    {selectedBoard.columns.map((column, columnIndex) => (
                       <section
                         key={column.id}
-                        className="rounded-3xl border border-navy/10 bg-surface-alt p-4 shadow-sm"
+                        className="motion-stagger rounded-2xl border border-navy/10 bg-surface p-4 shadow-sm"
+                        style={{ '--stagger-delay': `${columnIndex * 55}ms` } as CSSProperties}
                       >
                         <h3 className="mb-4 text-sm font-bold uppercase tracking-wide text-navy/50">
                           {column.title}
@@ -568,7 +580,8 @@ export function BoardsPage() {
                             {column.cards.map((card, index) => (
                               <li
                                 key={`${column.id}-${index}`}
-                                className="rounded-2xl border border-navy/10 bg-white p-4 text-sm font-semibold text-navy shadow-sm"
+                                className="motion-stagger hover-lift rounded-xl border border-navy/10 bg-white p-4 text-sm font-semibold text-navy shadow-sm"
+                                style={{ '--stagger-delay': `${columnIndex * 55 + index * 35}ms` } as CSSProperties}
                               >
                                 {card}
                               </li>
@@ -584,7 +597,7 @@ export function BoardsPage() {
                   </div>
                 </div>
               ) : (
-                <div className="rounded-4xl border border-dashed border-navy/15 bg-surface-alt px-8 py-16 text-center">
+                <div className="panel-shell border-dashed bg-surface px-8 py-16 text-center">
                   <p className="text-sm text-navy/60">Выберите доску из списка слева</p>
                 </div>
               )}

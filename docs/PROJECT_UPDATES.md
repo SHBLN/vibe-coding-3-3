@@ -349,3 +349,23 @@ flowchart TD
 - Создание/переименование/удаление колонки сохраняется в Supabase.
 - Удаление непустой колонки → карточки переносятся в `Backlog`.
 - Drag&drop колонок и карточек сохраняется после перезагрузки страницы.
+
+### 22) UI-полировка лендинга, списка досок и участников
+- В `src/index.css` добавлены общие утилиты:
+  - `panel-shell`, `chip`;
+  - micro-interactions: `hover-lift`, `press-down`, `transition-soft`;
+  - анимации появления: `motion-fade-in`, `motion-scale-in`, `motion-stagger`;
+  - отключение анимаций при `prefers-reduced-motion`.
+- Обновлены секции лендинга и страницы onboarding под единый визуальный язык.
+- `BoardsPage`: градиентный фон, sticky header, chips со статистикой, улучшенный sidebar и карточки досок.
+- `BoardMembersPicker`: popover заменён на полноэкранную модалку через `createPortal` (без overflow-глюков).
+- Расширен `tailwind.config.js` под новые utility-классы.
+
+## Ключевые файлы (UI-полировка)
+- `src/index.css`
+- `tailwind.config.js`
+- `src/pages/BoardsPage.tsx`
+- `src/pages/LandingPage.tsx`
+- `src/pages/OnboardingPage.tsx`
+- `src/components/board/BoardMembersPicker.tsx`
+- `src/components/landing/*`

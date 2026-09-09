@@ -10,7 +10,7 @@ const items = [
 export function TickerBar() {
   return (
     <div className="section-shell py-3">
-      <div className="flex flex-wrap items-center justify-center gap-5 overflow-hidden rounded-2xl bg-navy px-6 py-4 text-xs font-black uppercase tracking-[0.2em] text-white shadow-button sm:rounded-full">
+      <div className="panel-shell flex flex-wrap items-center justify-center gap-5 overflow-hidden bg-navy px-6 py-4 text-xs font-black uppercase tracking-[0.2em] text-white">
         {items.map((item, i) => (
           <span key={item} className="flex items-center gap-4">
             {item}

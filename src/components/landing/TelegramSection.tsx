@@ -9,8 +9,8 @@ const benefits = [
 function PhoneMockup() {
   return (
     <div className="relative mx-auto w-full max-w-xs">
-      <div className="overflow-hidden rounded-[2.5rem] border-4 border-navy bg-navy p-1 shadow-hero">
-        <div className="overflow-hidden rounded-[2rem] bg-[#172554]">
+      <div className="overflow-hidden rounded-3xl border-4 border-navy bg-navy p-1 shadow-hero">
+        <div className="overflow-hidden rounded-[1.6rem] bg-[#172554]">
           <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3">
             <div className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-500 text-[10px] font-bold text-white">
               б
@@ -47,13 +47,13 @@ export function TelegramSection() {
     <section className="bg-surface py-24">
       <div className="section-shell grid items-center gap-10 lg:grid-cols-2 lg:gap-16">
         <div className="relative flex items-center justify-center">
-          <div className="dot-grid absolute inset-0 rounded-4xl opacity-50" />
-          <div className="relative -rotate-2 rounded-[3rem] bg-navy p-8 shadow-hero sm:p-12">
+          <div className="dot-grid absolute inset-0 rounded-3xl opacity-50" />
+          <div className="relative -rotate-1 rounded-3xl bg-navy p-8 shadow-hero sm:p-12">
             <PhoneMockup />
           </div>
         </div>
 
-        <article className="rounded-[2.5rem] border border-navy/10 bg-surface p-8 shadow-card lg:p-12">
+        <article className="panel-shell p-8 lg:p-12">
           <p className="mb-4 text-xs font-black uppercase tracking-[0.2em] text-accent">
             Telegram — ваш новый напарник
           </p>

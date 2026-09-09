@@ -18,17 +18,17 @@ type AccountBadgeProps = {
 export function AccountBadge({ account, onSignOut, signingOut = false }: AccountBadgeProps) {
   return (
     <div className="flex items-center gap-2 sm:gap-3">
-      <div className="hidden items-center gap-3 rounded-full border border-navy/10 bg-surface-alt px-3 py-2 sm:flex">
-        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent-light text-xs font-black text-white">
+      <div className="hidden items-center gap-3 rounded-2xl border border-navy/10 bg-white px-3 py-2 sm:flex">
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-accent to-accent-dark text-xs font-black text-white">
           {getInitials(account.displayName)}
         </div>
         <div className="min-w-0">
           <p className="truncate text-sm font-bold text-navy">{account.displayName}</p>
-          <p className="truncate text-xs text-navy/50">{account.role}</p>
+          <p className="truncate text-xs text-navy/55">{account.role}</p>
         </div>
       </div>
 
-      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent-light text-xs font-black text-white sm:hidden">
+      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-accent to-accent-dark text-xs font-black text-white sm:hidden">
         {getInitials(account.displayName)}
       </div>
 
@@ -36,7 +36,7 @@ export function AccountBadge({ account, onSignOut, signingOut = false }: Account
         type="button"
         onClick={onSignOut}
         disabled={signingOut}
-        className="rounded-full border border-navy/10 px-3 py-2 text-xs font-bold text-navy/70 transition hover:border-accent hover:text-accent disabled:opacity-60"
+        className="rounded-xl border border-navy/10 bg-white px-3 py-2 text-xs font-bold text-navy/70 transition hover:border-accent hover:text-accent disabled:opacity-60"
       >
         {signingOut ? 'Выход…' : 'Выйти'}
       </button>

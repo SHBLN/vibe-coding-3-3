@@ -47,7 +47,7 @@ function Field({
 }) {
   return (
     <div className="space-y-2">
-      <label htmlFor={id} className="block text-sm font-semibold text-slate-100">
+      <label htmlFor={id} className="block text-sm font-semibold text-navy">
         {label}
       </label>
       {children ?? (
@@ -61,7 +61,7 @@ function Field({
           autoComplete={autoComplete}
           required={required}
           disabled={disabled}
-          className="w-full rounded-2xl border border-white/15 bg-navy-light px-4 py-3 text-sm text-slate-100 outline-none transition placeholder:text-slate-400 focus:border-accent focus:ring-2 focus:ring-accent/20 disabled:cursor-not-allowed disabled:opacity-60"
+          className="w-full rounded-xl border border-navy/15 bg-surface px-4 py-3 text-sm text-navy outline-none transition placeholder:text-navy/35 focus:border-accent focus:ring-2 focus:ring-accent/20 disabled:cursor-not-allowed disabled:opacity-60"
         />
       )}
     </div>
@@ -79,10 +79,10 @@ function AuthMessage({
 
   return (
     <div
-      className={`rounded-2xl px-4 py-3 text-sm ${
+      className={`rounded-xl px-4 py-3 text-sm ${
         error
-          ? 'border border-red-400/40 bg-red-500/20 text-red-100'
-          : 'border border-emerald-400/40 bg-emerald-500/20 text-emerald-100'
+          ? 'border border-red-400/40 bg-red-500/10 text-red-700'
+          : 'border border-emerald-400/40 bg-emerald-500/10 text-emerald-700'
       }`}
       role={error ? 'alert' : 'status'}
     >
@@ -137,7 +137,7 @@ function LoginForm({
       />
 
       <div className="flex items-center justify-between pt-1">
-        <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-300">
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-navy/60">
           <input
             type="checkbox"
             disabled={loading}
@@ -162,18 +162,18 @@ function LoginForm({
         type="button"
         onClick={() => void onGoogleLogin()}
         disabled={loading}
-        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white px-4 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+        className="flex w-full items-center justify-center gap-2 rounded-xl border border-navy/15 bg-white px-4 py-3 text-sm font-semibold text-navy transition hover:bg-surface disabled:cursor-not-allowed disabled:opacity-60"
       >
         <span
           aria-hidden
-          className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 bg-white text-xs font-bold text-slate-700"
+          className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-navy/20 bg-white text-xs font-bold text-navy/70"
         >
           G
         </span>
         Войти или зарегистрироваться через Google
       </button>
 
-      <p className="text-center text-sm text-slate-300">
+      <p className="text-center text-sm text-navy/55">
         Нет аккаунта?{' '}
         <button
           type="button"
@@ -269,7 +269,7 @@ function RegisterForm({
           onChange={(event) => setRole(event.target.value)}
           required
           disabled={loading}
-          className="w-full appearance-none rounded-2xl border border-white/15 bg-navy-light px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20 disabled:cursor-not-allowed disabled:opacity-60"
+          className="w-full appearance-none rounded-xl border border-navy/15 bg-surface px-4 py-3 text-sm text-navy outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20 disabled:cursor-not-allowed disabled:opacity-60"
         >
           <option value="" disabled>
             Выберите роль
@@ -290,18 +290,18 @@ function RegisterForm({
         type="button"
         onClick={() => void onGoogleLogin()}
         disabled={loading}
-        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white px-4 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+        className="flex w-full items-center justify-center gap-2 rounded-xl border border-navy/15 bg-white px-4 py-3 text-sm font-semibold text-navy transition hover:bg-surface disabled:cursor-not-allowed disabled:opacity-60"
       >
         <span
           aria-hidden
-          className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 bg-white text-xs font-bold text-slate-700"
+          className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-navy/20 bg-white text-xs font-bold text-navy/70"
         >
           G
         </span>
         Зарегистрироваться через Google
       </button>
 
-      <p className="text-center text-sm text-slate-300">
+      <p className="text-center text-sm text-navy/55">
         Уже есть аккаунт?{' '}
         <button
           type="button"
@@ -488,11 +488,11 @@ export function AuthModal({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="modal-panel relative z-10 w-full max-w-md overflow-hidden rounded-4xl border border-white/10 bg-navy shadow-hero outline-none"
+        className="modal-panel relative z-10 w-full max-w-lg overflow-hidden rounded-3xl border border-navy/10 bg-white shadow-hero outline-none"
       >
-        <div className="flex items-start justify-between border-b border-white/10 bg-navy-light px-6 py-5">
+        <div className="flex items-start justify-between border-b border-navy/10 bg-navy px-6 py-5">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-navy text-accent">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-navy-light text-accent">
               <LogoIcon className="h-5 w-5" />
             </div>
             <div>
@@ -511,22 +511,22 @@ export function AuthModal({
             onClick={onClose}
             disabled={loading}
             aria-label="Закрыть"
-            className="rounded-full p-2 text-slate-400 transition hover:bg-white/10 hover:text-white disabled:opacity-60"
+            className="rounded-xl p-2 text-slate-400 transition hover:bg-white/10 hover:text-white disabled:opacity-60"
           >
             <CloseIcon />
           </button>
         </div>
 
-        <div className="border-b border-white/10 bg-navy-light px-6 py-3">
-          <div className="flex rounded-full bg-navy p-1">
+        <div className="border-b border-navy/10 bg-white px-6 py-3">
+          <div className="flex rounded-xl bg-surface p-1">
             <button
               type="button"
               disabled={loading}
               onClick={() => onTabChange('login')}
-              className={`flex-1 rounded-full px-4 py-2 text-sm font-bold transition disabled:opacity-60 ${
+              className={`flex-1 rounded-lg px-4 py-2 text-sm font-bold transition disabled:opacity-60 ${
                 activeTab === 'login'
                   ? 'bg-accent text-white shadow-sm'
-                  : 'text-slate-300 hover:text-white'
+                  : 'text-navy/60 hover:text-navy'
               }`}
             >
               Вход
@@ -535,10 +535,10 @@ export function AuthModal({
               type="button"
               disabled={loading}
               onClick={() => onTabChange('register')}
-              className={`flex-1 rounded-full px-4 py-2 text-sm font-bold transition disabled:opacity-60 ${
+              className={`flex-1 rounded-lg px-4 py-2 text-sm font-bold transition disabled:opacity-60 ${
                 activeTab === 'register'
                   ? 'bg-accent text-white shadow-sm'
-                  : 'text-slate-300 hover:text-white'
+                  : 'text-navy/60 hover:text-navy'
               }`}
             >
               Регистрация
@@ -546,7 +546,7 @@ export function AuthModal({
           </div>
         </div>
 
-        <div className="max-h-[min(70vh,640px)] space-y-4 overflow-y-auto bg-navy px-6 py-6">
+        <div className="max-h-[min(70vh,640px)] space-y-4 overflow-y-auto bg-white px-6 py-6">
           <AuthMessage error={error} success={success} />
           {activeTab === 'login' ? (
             <LoginForm

@@ -68,7 +68,7 @@ export function ButtonPrimary({
       type={type}
       onClick={onClick}
       disabled={disabled}
-      className={`inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-accent to-accent-light px-5 py-3 text-sm font-black text-white shadow-button transition duration-200 hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 ${className}`}
+      className={`inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-accent to-accent-dark px-5 py-3 text-sm font-black text-white shadow-button transition duration-200 hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 ${className}`}
     >
       {children}
     </button>

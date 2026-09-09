@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { ArrowUpRightIcon, StarIcon } from './ui'
 
 const features = [
@@ -32,8 +33,29 @@ const features = [
 ]
 
 export function FeaturesSection() {
+  const sectionRef = useRef<HTMLElement>(null)
+  const [isVisible, setIsVisible] = useState(false)
+
+  useEffect(() => {
+    const target = sectionRef.current
+    if (!target || isVisible) return
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          setIsVisible(true)
+          observer.disconnect()
+        }
+      },
+      { threshold: 0.2 },
+    )
+
+    observer.observe(target)
+    return () => observer.disconnect()
+  }, [isVisible])
+
   return (
-    <section id="продукт" className="relative bg-surface pb-24 pt-24">
+    <section ref={sectionRef} id="продукт" className="relative bg-surface pb-24 pt-24">
       <div className="section-shell">
         <div className="mb-14 text-center">
           <p className="mb-4 text-xs font-black uppercase tracking-[0.25em] text-accent">
@@ -52,9 +74,12 @@ export function FeaturesSection() {
           {features.map((feature, index) => (
             <article
               key={feature.tag}
-              className={`group flex min-h-[410px] flex-col overflow-hidden rounded-[2.5rem] p-8 shadow-hero transition duration-300 hover:-translate-y-2 ${
+              className={`group flex min-h-[410px] flex-col overflow-hidden rounded-2xl border border-white/10 p-8 shadow-card transition duration-300 hover:-translate-y-2 ${
                 index === 1 ? 'bg-navy-light md:translate-y-8' : 'bg-navy'
-              }`}
+              } ${isVisible ? 'motion-stagger' : 'opacity-0 translate-y-2'}`}
+              style={
+                isVisible ? ({ '--stagger-delay': `${index * 55}ms` } as CSSProperties) : undefined
+              }
             >
               <div className="mb-10 flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 text-accent transition group-hover:rotate-6 group-hover:bg-accent group-hover:text-white">
                 <feature.icon className="h-4 w-4" />
@@ -68,7 +93,7 @@ export function FeaturesSection() {
               </p>
 
               {feature.showGoal && (
-                <div className="rounded-2xl border border-white/10 bg-navy-light p-4">
+                <div className="rounded-xl border border-white/10 bg-navy-light p-4">
                   <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-white/40">
                     Ваша цель
                   </p>

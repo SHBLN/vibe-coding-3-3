@@ -20,7 +20,7 @@ function DashboardMockup() {
   ]
 
   return (
-    <div className="-rotate-1 overflow-hidden rounded-[2rem] border-[6px] border-white/10 bg-white shadow-hero transition duration-500 hover:rotate-0">
+    <div className="-rotate-1 overflow-hidden rounded-3xl border-[6px] border-white/10 bg-white shadow-hero transition duration-500 hover:rotate-0">
       <div className="flex">
         <aside className="hidden w-16 shrink-0 flex-col items-center gap-4 bg-navy py-5 sm:flex">
           {[StarIcon, StarIcon, StarIcon, StarIcon].map((Icon, i) => (
@@ -38,7 +38,7 @@ function DashboardMockup() {
           </div>
           <div className="grid grid-cols-3 gap-2">
             {columns.map((col) => (
-              <div key={col.title} className="rounded-2xl bg-white/70 p-2.5">
+              <div key={col.title} className="rounded-xl bg-white/70 p-2.5">
                 <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-navy/50">
                   {col.title}
                 </p>
@@ -67,7 +67,7 @@ function DashboardMockup() {
 export function HeroSection() {
   return (
     <section className="section-shell pb-5">
-      <div className="relative overflow-hidden rounded-[2rem] bg-navy shadow-hero sm:rounded-[3.5rem]">
+      <div className="relative overflow-hidden rounded-3xl bg-navy shadow-hero">
         <div className="dot-grid absolute inset-0 opacity-20" />
         <div className="absolute -left-24 -top-24 h-80 w-80 rounded-full bg-accent/20 blur-[100px]" />
         <div className="relative grid min-h-[650px] items-center gap-12 p-7 sm:p-10 lg:grid-cols-[1.05fr_.95fr] lg:p-16">

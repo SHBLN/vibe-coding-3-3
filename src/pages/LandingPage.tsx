@@ -11,6 +11,12 @@ import { TestimonialPricingSection } from '../components/landing/TestimonialPric
 import { TickerBar } from '../components/landing/TickerBar'
 import { useAuth } from '../hooks/useAuth'
 
+const dashboardHighlights = [
+  { label: 'Активные доски', value: '11' },
+  { label: 'Задач в работе', value: '28' },
+  { label: 'Просрочено', value: '3' },
+]
+
 export function LandingPage() {
   const navigate = useNavigate()
   const { account, loading, refresh, signOut } = useAuth()
@@ -45,6 +51,16 @@ export function LandingPage() {
       />
 
       <main className="bg-surface">
+        <section className="section-shell py-5">
+          <div className="grid gap-3 sm:grid-cols-3">
+            {dashboardHighlights.map((item) => (
+              <div key={item.label} className="panel-shell px-4 py-3">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-navy/45">{item.label}</p>
+                <p className="mt-1 text-2xl font-black tracking-tight text-navy">{item.value}</p>
+              </div>
+            ))}
+          </div>
+        </section>
         <HeroSection />
         <TickerBar />
         <FeaturesSection />

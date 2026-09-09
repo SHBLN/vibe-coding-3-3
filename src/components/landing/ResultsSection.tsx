@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { ArrowUpRightIcon, OrangeUnderline } from './ui'
 
 const stats = [
@@ -25,11 +26,32 @@ const steps = [
 ]
 
 export function ResultsSection() {
+  const stepsRef = useRef<HTMLDivElement>(null)
+  const [stepsVisible, setStepsVisible] = useState(false)
+
+  useEffect(() => {
+    const target = stepsRef.current
+    if (!target || stepsVisible) return
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          setStepsVisible(true)
+          observer.disconnect()
+        }
+      },
+      { threshold: 0.2 },
+    )
+
+    observer.observe(target)
+    return () => observer.disconnect()
+  }, [stepsVisible])
+
   return (
     <section className="bg-surface pb-24 pt-8">
-      <div className="section-shell rounded-[2.5rem] bg-navy px-5 py-8 shadow-hero sm:rounded-[3.5rem] sm:p-10 lg:p-14">
+      <div className="section-shell rounded-3xl bg-navy px-5 py-8 shadow-hero sm:p-10 lg:p-14">
         <div className="mb-8 grid gap-5 lg:grid-cols-2">
-          <article className="rounded-4xl bg-navy-light p-8 lg:p-10">
+          <article className="rounded-2xl border border-white/10 bg-navy-light p-8 lg:p-10">
             <h2 className="mb-5 text-4xl font-black leading-[1.02] tracking-tight text-white sm:text-5xl">
               <OrangeUnderline variant="light">Больше</OrangeUnderline> результатов.
               <br />
@@ -48,7 +70,7 @@ export function ResultsSection() {
             </a>
           </article>
 
-          <div className="grid grid-cols-3 divide-x divide-white/10 rounded-4xl border border-white/5 bg-navy-light p-5 sm:p-8">
+          <div className="grid grid-cols-3 divide-x divide-white/10 rounded-2xl border border-white/10 bg-navy-light p-5 sm:p-8">
             {stats.map((stat) => (
               <div key={stat.value} className="flex flex-col items-center px-2 text-center">
                 <p className="mb-2 text-2xl font-black text-accent sm:text-5xl">{stat.value}</p>
@@ -60,7 +82,7 @@ export function ResultsSection() {
         </div>
 
         <div id="как-это-работает" className="grid gap-5 lg:grid-cols-2">
-          <article className="dot-grid rounded-4xl bg-surface p-8 lg:p-10">
+          <article className="dot-grid rounded-2xl border border-navy/10 bg-surface p-8 lg:p-10">
             <p className="mb-4 text-xs font-semibold uppercase tracking-[0.2em] text-navy/40">
               Как это работает
             </p>
@@ -71,11 +93,16 @@ export function ResultsSection() {
             </h2>
           </article>
 
-          <div className="flex flex-col gap-3">
-            {steps.map((step) => (
+          <div ref={stepsRef} className="flex flex-col gap-3">
+            {steps.map((step, index) => (
               <article
                 key={step.num}
-                className="group relative rounded-3xl bg-surface p-6 shadow-card transition hover:translate-x-2"
+                className={`group relative rounded-2xl border border-navy/10 bg-surface p-6 shadow-card transition hover:translate-x-2 ${
+                  stepsVisible ? 'motion-stagger' : 'opacity-0 translate-y-2'
+                }`}
+                style={
+                  stepsVisible ? ({ '--stagger-delay': `${index * 55}ms` } as CSSProperties) : undefined
+                }
               >
                 <span className="absolute right-5 top-5 text-accent">
                   <ArrowUpRightIcon className="h-4 w-4 rotate-90" />
