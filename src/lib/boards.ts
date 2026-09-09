@@ -19,7 +19,12 @@ export type Board = {
   columns: BoardColumn[]
 }
 
-const DEFAULT_COLUMN_TITLES = ['К выполнению', 'В работе', 'Готово'] as const
+const DEFAULT_COLUMNS = [
+  { title: 'Backlog', statusKey: 'backlog' },
+  { title: 'In progress', statusKey: 'in_progress' },
+  { title: 'Review', statusKey: 'review' },
+  { title: 'Done', statusKey: 'done' },
+] as const
 
 function parseCards(value: Json): string[] {
   if (!Array.isArray(value)) return []
@@ -71,7 +76,7 @@ export async function listBoards(): Promise<Board[]> {
 
   const { data: columnRows, error: columnsError } = await supabase
     .from('board_columns')
-    .select('id, board_id, title, position, cards, created_at, updated_at')
+    .select('id, board_id, title, position, status_key, cards, created_at, updated_at')
     .in('board_id', boardIds)
     .order('position', { ascending: true })
 
@@ -105,9 +110,10 @@ export async function createBoard(payload: {
 
   if (boardError) throw new Error(boardError.message)
 
-  const columnInserts = DEFAULT_COLUMN_TITLES.map((title, index) => ({
+  const columnInserts = DEFAULT_COLUMNS.map((column, index) => ({
     board_id: boardRow.id,
-    title,
+    title: column.title,
+    status_key: column.statusKey,
     position: index,
     cards: [] as Json,
   }))
@@ -115,7 +121,7 @@ export async function createBoard(payload: {
   const { data: columnRows, error: columnsError } = await supabase
     .from('board_columns')
     .insert(columnInserts)
-    .select('id, board_id, title, position, cards, created_at, updated_at')
+    .select('id, board_id, title, position, status_key, cards, created_at, updated_at')
 
   if (columnsError) throw new Error(columnsError.message)
 
@@ -140,7 +146,7 @@ export async function updateBoard(
 
   const { data: columnRows, error: columnsError } = await supabase
     .from('board_columns')
-    .select('id, board_id, title, position, cards, created_at, updated_at')
+    .select('id, board_id, title, position, status_key, cards, created_at, updated_at')
     .eq('board_id', boardId)
     .order('position', { ascending: true })
 

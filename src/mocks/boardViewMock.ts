@@ -1,4 +1,7 @@
-export type TaskStatus = 'todo' | 'in_progress' | 'done'
+export type TaskStatus = string
+
+export const BACKLOG_STATUS_KEY = 'backlog'
+export const DONE_STATUS_KEY = 'done'
 
 export type TaskKind = 'task' | 'epic'
 
@@ -24,6 +27,8 @@ export type BoardTask = {
 export type BoardViewColumn = {
   id: string
   title: string
+  statusKey: string
+  /** Статус задач в колонке — совпадает с statusKey колонки */
   status: TaskStatus
   tasks: BoardTask[]
 }
@@ -47,13 +52,14 @@ const MOCK_BOARDS: Record<string, BoardViewData> = {
     columns: [
       {
         id: 'col-todo',
-        title: 'К выполнению',
-        status: 'todo',
+        title: 'Backlog',
+        statusKey: 'backlog',
+        status: 'backlog',
         tasks: [
           {
             id: 'task-1',
             title: 'Webhook Telegram с проверкой secret',
-            status: 'todo',
+            status: 'backlog',
             kind: 'task',
             assigneeId: null,
             assigneeName: 'Алексей К.',
@@ -65,7 +71,7 @@ const MOCK_BOARDS: Record<string, BoardViewData> = {
           {
             id: 'task-2',
             title: 'Маппинг Telegram user ↔ профиль',
-            status: 'todo',
+            status: 'backlog',
             kind: 'task',
             assigneeId: null,
             assigneeName: 'Мария С.',
@@ -77,7 +83,7 @@ const MOCK_BOARDS: Record<string, BoardViewData> = {
           {
             id: 'task-3',
             title: 'Пустая колонка — демо состояния',
-            status: 'todo',
+            status: 'backlog',
             kind: 'task',
             assigneeId: null,
             assigneeName: null,
@@ -88,7 +94,8 @@ const MOCK_BOARDS: Record<string, BoardViewData> = {
       },
       {
         id: 'col-progress',
-        title: 'В работе',
+        title: 'In progress',
+        statusKey: 'in_progress',
         status: 'in_progress',
         tasks: [
           {
@@ -118,8 +125,16 @@ const MOCK_BOARDS: Record<string, BoardViewData> = {
         ],
       },
       {
+        id: 'col-review',
+        title: 'Review',
+        statusKey: 'review',
+        status: 'review',
+        tasks: [],
+      },
+      {
         id: 'col-done',
-        title: 'Готово',
+        title: 'Done',
+        statusKey: 'done',
         status: 'done',
         tasks: [
           {
@@ -146,13 +161,14 @@ const MOCK_BOARDS: Record<string, BoardViewData> = {
     columns: [
       {
         id: 'col-todo-r',
-        title: 'К выполнению',
-        status: 'todo',
+        title: 'Backlog',
+        statusKey: 'backlog',
+        status: 'backlog',
         tasks: [
           {
             id: 'epic-1',
             title: 'Telegram-бот для постановки задач',
-            status: 'todo',
+            status: 'backlog',
             kind: 'epic',
             assigneeId: null,
             assigneeName: 'Алексей К.',
@@ -164,7 +180,8 @@ const MOCK_BOARDS: Record<string, BoardViewData> = {
       },
       {
         id: 'col-progress-r',
-        title: 'В работе',
+        title: 'In progress',
+        statusKey: 'in_progress',
         status: 'in_progress',
         tasks: [
           {
@@ -181,8 +198,16 @@ const MOCK_BOARDS: Record<string, BoardViewData> = {
         ],
       },
       {
+        id: 'col-review-r',
+        title: 'Review',
+        statusKey: 'review',
+        status: 'review',
+        tasks: [],
+      },
+      {
         id: 'col-done-r',
-        title: 'Готово',
+        title: 'Done',
+        statusKey: 'done',
         status: 'done',
         tasks: [],
       },

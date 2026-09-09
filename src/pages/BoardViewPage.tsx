@@ -9,24 +9,32 @@ import {
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AssigneePicker } from '../components/board/AssigneePicker'
 import { BoardMembersPicker } from '../components/board/BoardMembersPicker'
+import { ColumnFormModal } from '../components/board/ColumnFormModal'
+import { DeleteColumnModal } from '../components/board/DeleteColumnModal'
 import { DeleteTaskModal } from '../components/board/DeleteTaskModal'
 import { TaskFormModal, type TaskFormValues } from '../components/board/TaskFormModal'
 import { AccountBadge } from '../components/landing/AccountBadge'
 import { ButtonPrimary, LogoIcon } from '../components/landing/ui'
 import { useAuth } from '../hooks/useAuth'
 import {
+  BACKLOG_STATUS_KEY,
+  createBoardColumn,
   createTask,
+  deleteBoardColumn,
   deleteTask,
   fetchBoardView,
+  reindexBoardColumns,
   saveBoardColumnsState,
   syncTaskAssignees,
+  updateBoardColumn,
   updateTask,
 } from '../lib/boardTasks'
 import { getProfileInitials, listProfiles, type AssigneeProfile } from '../lib/profiles'
-import type {
-  BoardTask,
-  BoardViewColumn,
-  BoardViewData,
+import {
+  DONE_STATUS_KEY,
+  type BoardTask,
+  type BoardViewColumn,
+  type BoardViewData,
 } from '../mocks/boardViewMock'
 
 function formatDate(iso: string) {
@@ -45,7 +53,7 @@ function formatDueDate(iso: string) {
 }
 
 function isOverdue(dueAt: string | null, status: BoardTask['status']) {
-  if (!dueAt || status === 'done') return false
+  if (!dueAt || status === DONE_STATUS_KEY) return false
   return new Date(dueAt) < new Date()
 }
 
@@ -68,7 +76,7 @@ function moveTask(columns: BoardViewColumn[], payload: MoveTaskPayload): BoardVi
 
   const updatedTask: BoardTask = {
     ...movedTask,
-    status: targetColumn.status,
+    status: targetColumn.statusKey,
   }
 
   const withoutTask = columns.map((column) => {
@@ -100,6 +108,24 @@ function moveTask(columns: BoardViewColumn[], payload: MoveTaskPayload): BoardVi
   })
 }
 
+function moveColumn(
+  columns: BoardViewColumn[],
+  sourceColumnId: string,
+  targetColumnId: string,
+): BoardViewColumn[] {
+  if (sourceColumnId === targetColumnId) return columns
+
+  const sourceIndex = columns.findIndex((column) => column.id === sourceColumnId)
+  const targetIndex = columns.findIndex((column) => column.id === targetColumnId)
+  if (sourceIndex === -1 || targetIndex === -1) return columns
+
+  const nextColumns = [...columns]
+  const [movedColumn] = nextColumns.splice(sourceIndex, 1)
+  nextColumns.splice(targetIndex, 0, movedColumn)
+
+  return nextColumns
+}
+
 type DragState = {
   activeTaskId: string | null
   sourceColumnId: string | null
@@ -112,6 +138,16 @@ const INITIAL_DRAG_STATE: DragState = {
   sourceColumnId: null,
   overColumnId: null,
   overTaskId: null,
+}
+
+type ColumnDragState = {
+  activeColumnId: string | null
+  overColumnId: string | null
+}
+
+const INITIAL_COLUMN_DRAG_STATE: ColumnDragState = {
+  activeColumnId: null,
+  overColumnId: null,
 }
 
 type TaskFormState =
@@ -128,6 +164,19 @@ type TaskFormState =
 type TaskDeleteState = {
   task: BoardTask
   columnId: string
+}
+
+type ColumnFormState =
+  | {
+      mode: 'create'
+    }
+  | {
+      mode: 'edit'
+      column: BoardViewColumn
+    }
+
+type ColumnDeleteState = {
+  column: BoardViewColumn
 }
 
 function applyAssigneeUpdate(
@@ -358,15 +407,20 @@ type BoardColumnSectionProps = {
   profiles: AssigneeProfile[]
   profilesError: string | null
   dragState: DragState
+  columnDragState: ColumnDragState
   savingTaskId: string | null
   assigneeError: string | null
   crudLocked: boolean
   onCreateTask: (columnId: string) => void
+  onEditColumn: (column: BoardViewColumn) => void
+  onDeleteColumn: (column: BoardViewColumn) => void
   onEditTask: (task: BoardTask) => void
   onDeleteTask: (task: BoardTask) => void
   onAssigneeChange: (taskId: string, assigneeIds: string[]) => void | Promise<void>
   onDragStart: (event: DragEvent<HTMLElement>, taskId: string, columnId: string) => void
   onDragEnd: () => void
+  onColumnReorderStart: (event: DragEvent<HTMLElement>, columnId: string) => void
+  onColumnReorderEnd: () => void
   onColumnDragOver: (event: DragEvent<HTMLElement>, columnId: string) => void
   onColumnDragLeave: (event: DragEvent<HTMLElement>, columnId: string) => void
   onColumnDrop: (event: DragEvent<HTMLElement>, columnId: string) => void
@@ -380,60 +434,110 @@ function BoardColumnSection({
   profiles,
   profilesError,
   dragState,
+  columnDragState,
   savingTaskId,
   assigneeError,
   crudLocked,
   onCreateTask,
+  onEditColumn,
+  onDeleteColumn,
   onEditTask,
   onDeleteTask,
   onAssigneeChange,
   onDragStart,
   onDragEnd,
+  onColumnReorderStart,
+  onColumnReorderEnd,
   onColumnDragOver,
   onColumnDragLeave,
   onColumnDrop,
   onTaskDragOver,
   onTaskDrop,
 }: BoardColumnSectionProps) {
-  const isDropTarget = dragState.overColumnId === column.id && dragState.activeTaskId !== null
+  const isTaskDropTarget = dragState.overColumnId === column.id && dragState.activeTaskId !== null
+  const isColumnDragging = columnDragState.activeColumnId === column.id
+  const isColumnDropTarget =
+    columnDragState.overColumnId === column.id &&
+    columnDragState.activeColumnId !== null &&
+    columnDragState.activeColumnId !== column.id
   const isEmpty = column.tasks.length === 0
+  const isBacklog = column.statusKey === BACKLOG_STATUS_KEY
 
   return (
     <section
       className={`motion-stagger flex w-[312px] shrink-0 flex-col rounded-2xl border bg-surface p-4 shadow-sm transition ${
-        isDropTarget
-          ? 'border-accent/50 ring-2 ring-accent/25'
-          : 'border-navy/10'
+        isColumnDragging
+          ? 'cursor-grabbing border-navy/20 opacity-50'
+          : isColumnDropTarget
+            ? 'border-navy/40 ring-2 ring-navy/15'
+            : isTaskDropTarget
+              ? 'border-accent/50 ring-2 ring-accent/25'
+              : 'border-navy/10'
       }`}
       style={{ '--stagger-delay': `${columnIndex * 55}ms` } as CSSProperties}
       onDragOver={(event) => onColumnDragOver(event, column.id)}
       onDragLeave={(event) => onColumnDragLeave(event, column.id)}
       onDrop={(event) => onColumnDrop(event, column.id)}
     >
-      <header className="mb-4 flex items-center justify-between gap-2">
-        <div className="min-w-0">
-          <h3 className="text-sm font-bold uppercase tracking-wide text-navy/50">{column.title}</h3>
-          <span className="text-[11px] font-semibold text-navy/35">{column.tasks.length} карточек</span>
+      <header className="mb-4 flex flex-col gap-2">
+        <div className="flex items-start gap-2">
+          <span
+            draggable
+            onDragStart={(event) => onColumnReorderStart(event, column.id)}
+            onDragEnd={onColumnReorderEnd}
+            aria-label="Перетащить колонку"
+            className="mt-0.5 shrink-0 cursor-grab rounded-md p-0.5 text-navy/25 transition hover:text-navy/45 active:cursor-grabbing"
+          >
+            <DragGripIcon />
+          </span>
+          <h3 className="min-w-0 flex-1 break-words text-sm font-bold uppercase leading-snug tracking-wide text-navy/50">
+            {column.title}
+          </h3>
         </div>
-        <button
-          type="button"
-          onClick={() => onCreateTask(column.id)}
-          disabled={crudLocked}
-          className="press-down shrink-0 rounded-xl border border-navy/10 bg-white px-2.5 py-1.5 text-[11px] font-bold text-navy/60 hover:border-accent/40 hover:text-accent disabled:opacity-50"
-        >
-          + Карточка
-        </button>
+        <div className="flex items-center justify-between gap-2 pl-6">
+          <span className="text-[11px] font-semibold text-navy/35">{column.tasks.length} карточек</span>
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-1" data-no-drag>
+            <button
+              type="button"
+              onClick={() => onEditColumn(column)}
+              disabled={crudLocked}
+              aria-label="Редактировать колонку"
+              className="press-down rounded-lg p-1.5 text-navy/40 hover:bg-white hover:text-navy disabled:opacity-50"
+            >
+              <PencilIcon />
+            </button>
+            {!isBacklog ? (
+              <button
+                type="button"
+                onClick={() => onDeleteColumn(column)}
+                disabled={crudLocked}
+                aria-label="Удалить колонку"
+                className="press-down rounded-lg p-1.5 text-navy/40 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+              >
+                <TrashIcon />
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => onCreateTask(column.id)}
+              disabled={crudLocked}
+              className="press-down rounded-xl border border-navy/10 bg-white px-2.5 py-1.5 text-[11px] font-bold text-navy/60 hover:border-accent/40 hover:text-accent disabled:opacity-50"
+            >
+              + Карточка
+            </button>
+          </div>
+        </div>
       </header>
 
       {isEmpty ? (
         <div
           className={`flex min-h-[120px] flex-1 items-center justify-center rounded-2xl border border-dashed px-4 py-8 text-center text-xs transition ${
-            isDropTarget
+            isTaskDropTarget
               ? 'border-accent/50 bg-accent/5 text-accent-dark'
               : 'border-navy/10 bg-white/60 text-navy/40'
           }`}
         >
-          {isDropTarget ? 'Отпустите карточку здесь' : 'Нет карточек'}
+          {isTaskDropTarget ? 'Отпустите карточку здесь' : 'Нет карточек'}
         </div>
       ) : (
         <ul className="space-y-3">
@@ -494,16 +598,22 @@ type BoardViewContentProps = {
   profilesError: string | null
   boardMemberIds: string[]
   dragState: DragState
+  columnDragState: ColumnDragState
   savingTaskId: string | null
   assigneeError: string | null
   crudLocked: boolean
   onBoardMembersChange: (ids: string[]) => void
+  onCreateColumn: () => void
   onCreateTask: (columnId: string) => void
+  onEditColumn: (column: BoardViewColumn) => void
+  onDeleteColumn: (column: BoardViewColumn) => void
   onEditTask: (task: BoardTask) => void
   onDeleteTask: (task: BoardTask) => void
   onAssigneeChange: (taskId: string, assigneeIds: string[]) => void | Promise<void>
   onDragStart: (event: DragEvent<HTMLElement>, taskId: string, columnId: string) => void
   onDragEnd: () => void
+  onColumnReorderStart: (event: DragEvent<HTMLElement>, columnId: string) => void
+  onColumnReorderEnd: () => void
   onColumnDragOver: (event: DragEvent<HTMLElement>, columnId: string) => void
   onColumnDragLeave: (event: DragEvent<HTMLElement>, columnId: string) => void
   onColumnDrop: (event: DragEvent<HTMLElement>, columnId: string) => void
@@ -518,16 +628,22 @@ function BoardViewContent({
   profilesError,
   boardMemberIds,
   dragState,
+  columnDragState,
   savingTaskId,
   assigneeError,
   crudLocked,
   onBoardMembersChange,
+  onCreateColumn,
   onCreateTask,
+  onEditColumn,
+  onDeleteColumn,
   onEditTask,
   onDeleteTask,
   onAssigneeChange,
   onDragStart,
   onDragEnd,
+  onColumnReorderStart,
+  onColumnReorderEnd,
   onColumnDragOver,
   onColumnDragLeave,
   onColumnDrop,
@@ -556,9 +672,11 @@ function BoardViewContent({
             {formatDate(board.updatedAt)}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
-            <span className="chip">К выполнению: {columns.find((c) => c.status === 'todo')?.tasks.length ?? 0}</span>
-            <span className="chip">В работе: {columns.find((c) => c.status === 'in_progress')?.tasks.length ?? 0}</span>
-            <span className="chip">Готово: {columns.find((c) => c.status === 'done')?.tasks.length ?? 0}</span>
+            {columns.map((column) => (
+              <span key={column.id} className="chip">
+                {column.title}: {column.tasks.length}
+              </span>
+            ))}
           </div>
         </div>
 
@@ -582,15 +700,20 @@ function BoardViewContent({
               profiles={profiles}
               profilesError={profilesError}
               dragState={dragState}
+              columnDragState={columnDragState}
               savingTaskId={savingTaskId}
               assigneeError={assigneeError}
               crudLocked={crudLocked}
               onCreateTask={onCreateTask}
+              onEditColumn={onEditColumn}
+              onDeleteColumn={onDeleteColumn}
               onEditTask={onEditTask}
               onDeleteTask={onDeleteTask}
               onAssigneeChange={onAssigneeChange}
               onDragStart={onDragStart}
               onDragEnd={onDragEnd}
+              onColumnReorderStart={onColumnReorderStart}
+              onColumnReorderEnd={onColumnReorderEnd}
               onColumnDragOver={onColumnDragOver}
               onColumnDragLeave={onColumnDragLeave}
               onColumnDrop={onColumnDrop}
@@ -598,6 +721,15 @@ function BoardViewContent({
               onTaskDrop={onTaskDrop}
             />
           ))}
+
+          <button
+            type="button"
+            onClick={onCreateColumn}
+            disabled={crudLocked}
+            className="press-down flex h-[120px] w-[312px] shrink-0 items-center justify-center rounded-2xl border border-dashed border-navy/15 bg-white/60 text-sm font-bold text-navy/45 transition hover:border-accent/40 hover:bg-accent/5 hover:text-accent disabled:opacity-50"
+          >
+            + Колонка
+          </button>
         </div>
       </div>
     </>
@@ -617,17 +749,25 @@ export function BoardViewPage() {
   const [profiles, setProfiles] = useState<AssigneeProfile[]>([])
   const [profilesError, setProfilesError] = useState<string | null>(null)
   const [dragState, setDragState] = useState<DragState>(INITIAL_DRAG_STATE)
+  const [columnDragState, setColumnDragState] = useState<ColumnDragState>(INITIAL_COLUMN_DRAG_STATE)
   const [savingTaskId, setSavingTaskId] = useState<string | null>(null)
   const [assigneeError, setAssigneeError] = useState<string | null>(null)
   const [taskForm, setTaskForm] = useState<TaskFormState | null>(null)
   const [taskToDelete, setTaskToDelete] = useState<TaskDeleteState | null>(null)
+  const [columnForm, setColumnForm] = useState<ColumnFormState | null>(null)
+  const [columnToDelete, setColumnToDelete] = useState<ColumnDeleteState | null>(null)
   const [crudBusy, setCrudBusy] = useState(false)
   const dragContextRef = useRef<{ taskId: string; sourceColumnId: string } | null>(null)
+  const columnDragRef = useRef<string | null>(null)
   const columnsRef = useRef(columns)
 
   columnsRef.current = columns
 
-  const crudLocked = crudBusy || savingTaskId !== null || dragState.activeTaskId !== null
+  const crudLocked =
+    crudBusy ||
+    savingTaskId !== null ||
+    dragState.activeTaskId !== null ||
+    columnDragState.activeColumnId !== null
 
   const findColumnById = useCallback(
     (columnId: string) => columns.find((column) => column.id === columnId) ?? null,
@@ -656,7 +796,7 @@ export function BoardViewPage() {
       return {
         id: taskId,
         title: values.title,
-        status: column.status,
+        status: column.statusKey,
         kind: 'task',
         assigneeId: values.assigneeIds[0] ?? null,
         assigneeIds: values.assigneeIds,
@@ -743,6 +883,19 @@ export function BoardViewPage() {
     setTaskForm({ mode: 'create', columnId })
   }, [])
 
+  const handleOpenCreateColumn = useCallback(() => {
+    setColumnForm({ mode: 'create' })
+  }, [])
+
+  const handleOpenEditColumn = useCallback((column: BoardViewColumn) => {
+    setColumnForm({ mode: 'edit', column })
+  }, [])
+
+  const handleOpenDeleteColumn = useCallback((column: BoardViewColumn) => {
+    if (column.statusKey === BACKLOG_STATUS_KEY) return
+    setColumnToDelete({ column })
+  }, [])
+
   const handleOpenEditTask = useCallback(
     (task: BoardTask) => {
       const located = findTaskColumn(task.id)
@@ -786,7 +939,7 @@ export function BoardViewPage() {
           const createdTask = await createTask({
             boardId,
             columnId: column.id,
-            status: column.status,
+            status: column.statusKey,
             title: values.title,
             dueAt: values.dueAt,
             assigneeIds: values.assigneeIds,
@@ -874,7 +1027,7 @@ export function BoardViewPage() {
         taskToDelete.task.id,
         boardId,
         column.id,
-        column.status,
+        column.statusKey,
         remainingTaskIds,
       )
     } catch (err) {
@@ -886,6 +1039,70 @@ export function BoardViewPage() {
       setCrudBusy(false)
     }
   }, [boardId, taskToDelete, findColumnById])
+
+  const handleColumnFormSubmit = useCallback(
+    async (title: string) => {
+      if (!boardId || !columnForm) return
+
+      const previousColumns = columnsRef.current
+      setBoardError(null)
+      setCrudBusy(true)
+
+      if (columnForm.mode === 'create') {
+        try {
+          const createdColumn = await createBoardColumn(boardId, title)
+          setColumns((prev) => [...prev, createdColumn])
+        } catch (err) {
+          setColumns(previousColumns)
+          throw err
+        } finally {
+          setCrudBusy(false)
+        }
+
+        return
+      }
+
+      const { column } = columnForm
+
+      setColumns((prev) =>
+        prev.map((item) => (item.id === column.id ? { ...item, title } : item)),
+      )
+
+      try {
+        await updateBoardColumn(column.id, title)
+      } catch (err) {
+        setColumns(previousColumns)
+        throw err
+      } finally {
+        setCrudBusy(false)
+      }
+    },
+    [boardId, columnForm],
+  )
+
+  const handleConfirmDeleteColumn = useCallback(async () => {
+    if (!boardId || !columnToDelete) return
+
+    const previousColumns = columnsRef.current
+    setBoardError(null)
+    setCrudBusy(true)
+
+    try {
+      const nextColumns = await deleteBoardColumn(
+        boardId,
+        columnToDelete.column.id,
+        previousColumns,
+      )
+      setColumns(nextColumns)
+    } catch (err) {
+      setColumns(previousColumns)
+      const message = err instanceof Error ? err.message : 'Не удалось удалить колонку.'
+      setBoardError(message)
+      throw new Error(message)
+    } finally {
+      setCrudBusy(false)
+    }
+  }, [boardId, columnToDelete])
 
   const handleAssigneeChange = useCallback(
     async (taskId: string, assigneeIds: string[]) => {
@@ -937,9 +1154,47 @@ export function BoardViewPage() {
     setDragState(INITIAL_DRAG_STATE)
   }, [])
 
+  const handleColumnReorderStart = useCallback(
+    (event: DragEvent<HTMLElement>, columnId: string) => {
+      if (crudBusy || savingTaskId !== null || dragState.activeTaskId !== null) {
+        event.preventDefault()
+        return
+      }
+
+      event.stopPropagation()
+      event.dataTransfer.effectAllowed = 'move'
+      event.dataTransfer.setData('text/plain', columnId)
+      event.dataTransfer.setData('application/x-board-column-id', columnId)
+      columnDragRef.current = columnId
+
+      setColumnDragState({
+        activeColumnId: columnId,
+        overColumnId: columnId,
+      })
+    },
+    [crudBusy, savingTaskId, dragState.activeTaskId],
+  )
+
+  const handleColumnReorderEnd = useCallback(() => {
+    columnDragRef.current = null
+    setColumnDragState(INITIAL_COLUMN_DRAG_STATE)
+  }, [])
+
   const handleColumnDragOver = useCallback((event: DragEvent<HTMLElement>, columnId: string) => {
     event.preventDefault()
     event.dataTransfer.dropEffect = 'move'
+
+    if (columnDragRef.current) {
+      setColumnDragState((prev) => {
+        if (!prev.activeColumnId || prev.overColumnId === columnId) return prev
+
+        return {
+          ...prev,
+          overColumnId: columnId,
+        }
+      })
+      return
+    }
 
     setDragState((prev) => {
       if (!prev.activeTaskId) return prev
@@ -955,6 +1210,18 @@ export function BoardViewPage() {
   const handleColumnDragLeave = useCallback((event: DragEvent<HTMLElement>, columnId: string) => {
     const relatedTarget = event.relatedTarget
     if (relatedTarget instanceof Node && event.currentTarget.contains(relatedTarget)) {
+      return
+    }
+
+    if (columnDragRef.current) {
+      setColumnDragState((prev) => {
+        if (prev.overColumnId !== columnId) return prev
+
+        return {
+          ...prev,
+          overColumnId: null,
+        }
+      })
       return
     }
 
@@ -1022,9 +1289,37 @@ export function BoardViewPage() {
   const handleColumnDrop = useCallback(
     (event: DragEvent<HTMLElement>, columnId: string) => {
       event.preventDefault()
+
+      const sourceColumnId = columnDragRef.current
+      if (sourceColumnId && boardId) {
+        if (sourceColumnId !== columnId) {
+          const previousColumns = columnsRef.current
+
+          setColumns((prev) => {
+            const nextColumns = moveColumn(prev, sourceColumnId, columnId)
+
+            void reindexBoardColumns(
+              boardId,
+              nextColumns.map((column) => column.id),
+            ).catch((err) => {
+              setColumns(previousColumns)
+              setBoardError(
+                err instanceof Error ? err.message : 'Не удалось сохранить порядок колонок.',
+              )
+            })
+
+            return nextColumns
+          })
+        }
+
+        columnDragRef.current = null
+        setColumnDragState(INITIAL_COLUMN_DRAG_STATE)
+        return
+      }
+
       handleDrop(columnId, null)
     },
-    [handleDrop],
+    [boardId, handleDrop],
   )
 
   const handleTaskDrop = useCallback(
@@ -1084,16 +1379,22 @@ export function BoardViewPage() {
             profilesError={profilesError}
             boardMemberIds={boardMemberIds}
             dragState={dragState}
+            columnDragState={columnDragState}
             savingTaskId={savingTaskId}
             assigneeError={assigneeError}
             crudLocked={crudLocked}
             onBoardMembersChange={setBoardMemberIds}
+            onCreateColumn={handleOpenCreateColumn}
             onCreateTask={handleOpenCreateTask}
+            onEditColumn={handleOpenEditColumn}
+            onDeleteColumn={handleOpenDeleteColumn}
             onEditTask={handleOpenEditTask}
             onDeleteTask={handleOpenDeleteTask}
             onAssigneeChange={handleAssigneeChange}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
+            onColumnReorderStart={handleColumnReorderStart}
+            onColumnReorderEnd={handleColumnReorderEnd}
             onColumnDragOver={handleColumnDragOver}
             onColumnDragLeave={handleColumnDragLeave}
             onColumnDrop={handleColumnDrop}
@@ -1127,6 +1428,22 @@ export function BoardViewPage() {
         taskTitle={taskToDelete?.task.title ?? ''}
         onClose={() => setTaskToDelete(null)}
         onConfirm={handleConfirmDeleteTask}
+      />
+
+      <ColumnFormModal
+        isOpen={columnForm !== null}
+        mode={columnForm?.mode ?? 'create'}
+        initialTitle={columnForm?.mode === 'edit' ? columnForm.column.title : ''}
+        onClose={() => setColumnForm(null)}
+        onSubmit={handleColumnFormSubmit}
+      />
+
+      <DeleteColumnModal
+        isOpen={columnToDelete !== null}
+        columnTitle={columnToDelete?.column.title ?? ''}
+        taskCount={columnToDelete?.column.tasks.length ?? 0}
+        onClose={() => setColumnToDelete(null)}
+        onConfirm={handleConfirmDeleteColumn}
       />
     </div>
   )
