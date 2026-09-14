@@ -457,3 +457,44 @@ R2_SECRET_ACCESS_KEY=...
 - Комментарий без файла сохраняется в `task_comments`.
 - Комментарий с файлом загружает объект в R2, в Supabase сохраняется только ссылка и метаданные.
 - Ссылка из `attachment_url` открывает загруженный файл при корректном CORS/Public URL.
+
+### 25) AI-оркестратор задач через Edge Function `anymodel-chat`
+- Функция `supabase/functions/anymodel-chat/index.ts` переведена из простого chat-прокси в оркестратор постановки задач.
+- Новый сценарий:
+  1) принимает глобальную задачу (`boardId`, `title`, `description?`, `dueAt?`, опционально `columnId/status`);
+  2) вызывает AnyModel для разбиения на подзадачи;
+  3) подбирает исполнителей по `profiles.role` с учетом текущей нагрузки;
+  4) создает эпик (`kind='epic'`) и дочерние подзадачи (`kind='task'`, `parent_id=epic.id`);
+  5) сохраняет назначения в `task_assignees`.
+- Для надежности добавлен rollback: при ошибке записи частично созданные задачи удаляются.
+- `verify_jwt` для `anymodel-chat` включен (`supabase/config.toml`), вызов только от авторизованного пользователя.
+- Добавлен fallback backlog: если `columnId/status` не переданы, функция находит колонку по `status_key='backlog'` в текущей доске.
+- В ответ функции добавлены поля для UI-обновления без полного рефетча: `boardTasks`, `backlogColumnId`, `backlogStatus`, `warnings`, `unmatchedRoles`.
+
+### 26) Live-чат на доске с автопостановкой задач
+- Добавлена таблица `public.board_messages` (миграция `supabase/migrations/20260914190000_create_board_messages.sql`):
+  - `board_id`, `author_id`, `body`, `ai_run_status`, `ai_result_summary`, `created_at`;
+  - RLS-политики в текущей модели доступа владельца доски;
+  - подключение к `supabase_realtime` publication.
+- Добавлен клиентский API-слой `src/lib/boardChat.ts`:
+  - `listBoardMessages`, `createBoardMessage`, `updateBoardMessageAiStatus`;
+  - `subscribeBoardMessages` через `postgres_changes`;
+  - `runBoardMessageAiSplit` для вызова `anymodel-chat`;
+  - mapper `mapAiSplitToBoardTasks` для приведения ответа к `BoardTask`.
+- Добавлен UI-компонент `src/components/board/BoardChatPanel.tsx`:
+  - список сообщений;
+  - ввод и отправка;
+  - статусы AI (`processing/success/error`) и summary результата.
+- `src/pages/BoardViewPage.tsx` обновлен:
+  - чат встроен в layout страницы доски рядом с колонками;
+  - сообщения загружаются и синхронизируются в realtime;
+  - каждое сообщение запускает AI-разбиение;
+  - созданные эпик/подзадачи мгновенно добавляются в backlog текущей доски.
+- Добавлены типы `board_messages` в `src/lib/database.types.ts`.
+
+#### Проверка (AI chat flow)
+- `npm run build` проходит успешно.
+- Отправка сообщения в чате создает запись в `board_messages` и статус `processing`.
+- После завершения AI появляются новые карточки в backlog текущей доски.
+- Сообщение получает статус `success` и summary о количестве созданных задач.
+- При ошибке AI сообщение сохраняется со статусом `error` и текстом ошибки.

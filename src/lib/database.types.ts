@@ -55,6 +55,51 @@ export type Database = {
           },
         ]
       }
+      board_messages: {
+        Row: {
+          ai_result_summary: string | null
+          ai_run_status: string
+          author_id: string
+          board_id: string
+          body: string
+          created_at: string
+          id: string
+        }
+        Insert: {
+          ai_result_summary?: string | null
+          ai_run_status?: string
+          author_id: string
+          board_id: string
+          body: string
+          created_at?: string
+          id?: string
+        }
+        Update: {
+          ai_result_summary?: string | null
+          ai_run_status?: string
+          author_id?: string
+          board_id?: string
+          body?: string
+          created_at?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'board_messages_author_id_fkey'
+            columns: ['author_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'board_messages_board_id_fkey'
+            columns: ['board_id']
+            isOneToOne: false
+            referencedRelation: 'boards'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       boards: {
         Row: {
           created_at: string

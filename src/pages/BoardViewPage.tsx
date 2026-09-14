@@ -8,6 +8,7 @@ import {
 } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AssigneePicker } from '../components/board/AssigneePicker'
+import { BoardChatPanel } from '../components/board/BoardChatPanel'
 import { BoardMembersPicker } from '../components/board/BoardMembersPicker'
 import { ColumnFormModal } from '../components/board/ColumnFormModal'
 import { DeleteColumnModal } from '../components/board/DeleteColumnModal'
@@ -17,6 +18,15 @@ import { TaskFormModal, type TaskFormValues } from '../components/board/TaskForm
 import { AccountBadge } from '../components/landing/AccountBadge'
 import { ButtonPrimary, LogoIcon } from '../components/landing/ui'
 import { useAuth } from '../hooks/useAuth'
+import {
+  createBoardMessage,
+  listBoardMessages,
+  mapAiSplitToBoardTasks,
+  runBoardMessageAiSplit,
+  subscribeBoardMessages,
+  updateBoardMessageAiStatus,
+  type BoardMessage,
+} from '../lib/boardChat'
 import {
   BACKLOG_STATUS_KEY,
   createBoardColumn,
@@ -817,9 +827,14 @@ export function BoardViewPage() {
   const [columnForm, setColumnForm] = useState<ColumnFormState | null>(null)
   const [columnToDelete, setColumnToDelete] = useState<ColumnDeleteState | null>(null)
   const [crudBusy, setCrudBusy] = useState(false)
+  const [chatMessages, setChatMessages] = useState<BoardMessage[]>([])
+  const [chatLoading, setChatLoading] = useState(false)
+  const [chatSending, setChatSending] = useState(false)
+  const [chatError, setChatError] = useState<string | null>(null)
   const dragContextRef = useRef<{ taskId: string; sourceColumnId: string } | null>(null)
   const columnDragRef = useRef<string | null>(null)
   const columnsRef = useRef(columns)
+  const processingMessageIdsRef = useRef<Set<string>>(new Set())
 
   columnsRef.current = columns
 
@@ -940,6 +955,140 @@ export function BoardViewPage() {
       cancelled = true
     }
   }, [loading, account])
+
+  useEffect(() => {
+    if (!boardId || loading || !account) return
+
+    let cancelled = false
+
+    async function loadMessages(currentBoardId: string) {
+      setChatLoading(true)
+      setChatError(null)
+
+      try {
+        const nextMessages = await listBoardMessages(currentBoardId)
+        if (!cancelled) setChatMessages(nextMessages)
+      } catch (err) {
+        if (!cancelled) {
+          setChatMessages([])
+          setChatError(
+            err instanceof Error ? err.message : 'Не удалось загрузить сообщения чата.',
+          )
+        }
+      } finally {
+        if (!cancelled) setChatLoading(false)
+      }
+    }
+
+    void loadMessages(boardId)
+
+    const unsubscribe = subscribeBoardMessages(boardId, (message, event) => {
+      setChatMessages((prev) => {
+        const existingIndex = prev.findIndex((item) => item.id === message.id)
+        if (existingIndex === -1) {
+          return event === 'insert' ? [...prev, message] : prev
+        }
+
+        const next = [...prev]
+        next[existingIndex] = message
+        return next
+      })
+    })
+
+    return () => {
+      cancelled = true
+      unsubscribe()
+    }
+  }, [boardId, loading, account])
+
+  const appendTasksToBacklog = useCallback((backlogColumnId: string, tasks: BoardTask[]) => {
+    if (tasks.length === 0) return
+
+    setColumns((prev) =>
+      prev.map((column) =>
+        column.id === backlogColumnId
+          ? {
+              ...column,
+              tasks: [
+                ...column.tasks,
+                ...tasks.filter(
+                  (task) => !column.tasks.some((existing) => existing.id === task.id),
+                ),
+              ],
+            }
+          : column,
+      ),
+    )
+  }, [])
+
+  const handleChatSubmit = useCallback(
+    async (body: string) => {
+      if (!boardId) return
+
+      setChatSending(true)
+      setChatError(null)
+
+      let message: BoardMessage
+      try {
+        message = await createBoardMessage(boardId, body)
+        setChatMessages((prev) =>
+          prev.some((item) => item.id === message.id) ? prev : [...prev, message],
+        )
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error ? err.message : 'Не удалось отправить сообщение.'
+        setChatError(errorMessage)
+        throw new Error(errorMessage)
+      }
+
+      if (processingMessageIdsRef.current.has(message.id)) {
+        setChatSending(false)
+        return
+      }
+
+      processingMessageIdsRef.current.add(message.id)
+
+      try {
+        const result = await runBoardMessageAiSplit({
+          boardId,
+          title: message.body,
+          description: message.body,
+        })
+
+        const tasks = mapAiSplitToBoardTasks(result)
+        appendTasksToBacklog(result.backlogColumnId, tasks)
+
+        const subtaskCount = Math.max(tasks.length - 1, 0)
+        const summary = `Создан эпик «${result.epic.title}» и ${subtaskCount} подзадач.`
+
+        await updateBoardMessageAiStatus(message.id, 'success', summary)
+        setChatMessages((prev) =>
+          prev.map((item) =>
+            item.id === message.id
+              ? { ...item, aiRunStatus: 'success', aiResultSummary: summary }
+              : item,
+          ),
+        )
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error ? err.message : 'Не удалось разбить задачу через AI.'
+
+        await updateBoardMessageAiStatus(message.id, 'error', errorMessage)
+        setChatMessages((prev) =>
+          prev.map((item) =>
+            item.id === message.id
+              ? { ...item, aiRunStatus: 'error', aiResultSummary: errorMessage }
+              : item,
+          ),
+        )
+        throw new Error(errorMessage)
+      } finally {
+        processingMessageIdsRef.current.delete(message.id)
+        setChatSending(false)
+      }
+    },
+    [appendTasksToBacklog, boardId],
+  )
 
   const handleOpenCreateTask = useCallback((columnId: string) => {
     setTaskForm({ mode: 'create', columnId })
@@ -1447,36 +1596,50 @@ export function BoardViewPage() {
         ) : null}
 
         {board ? (
-          <BoardViewContent
-            board={board}
-            columns={columns}
-            profiles={profiles}
-            profilesError={profilesError}
-            boardMemberIds={boardMemberIds}
-            dragState={dragState}
-            columnDragState={columnDragState}
-            savingTaskId={savingTaskId}
-            assigneeError={assigneeError}
-            crudLocked={crudLocked}
-            onBoardMembersChange={setBoardMemberIds}
-            onCreateColumn={handleOpenCreateColumn}
-            onCreateTask={handleOpenCreateTask}
-            onEditColumn={handleOpenEditColumn}
-            onDeleteColumn={handleOpenDeleteColumn}
-            onEditTask={handleOpenEditTask}
-            onDeleteTask={handleOpenDeleteTask}
-            onOpenComments={handleOpenComments}
-            onAssigneeChange={handleAssigneeChange}
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
-            onColumnReorderStart={handleColumnReorderStart}
-            onColumnReorderEnd={handleColumnReorderEnd}
-            onColumnDragOver={handleColumnDragOver}
-            onColumnDragLeave={handleColumnDragLeave}
-            onColumnDrop={handleColumnDrop}
-            onTaskDragOver={handleTaskDragOver}
-            onTaskDrop={handleTaskDrop}
-          />
+          <div className="flex flex-col gap-6 xl:flex-row xl:items-start">
+            <div className="min-w-0 flex-1">
+              <BoardViewContent
+                board={board}
+                columns={columns}
+                profiles={profiles}
+                profilesError={profilesError}
+                boardMemberIds={boardMemberIds}
+                dragState={dragState}
+                columnDragState={columnDragState}
+                savingTaskId={savingTaskId}
+                assigneeError={assigneeError}
+                crudLocked={crudLocked}
+                onBoardMembersChange={setBoardMemberIds}
+                onCreateColumn={handleOpenCreateColumn}
+                onCreateTask={handleOpenCreateTask}
+                onEditColumn={handleOpenEditColumn}
+                onDeleteColumn={handleOpenDeleteColumn}
+                onEditTask={handleOpenEditTask}
+                onDeleteTask={handleOpenDeleteTask}
+                onOpenComments={handleOpenComments}
+                onAssigneeChange={handleAssigneeChange}
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+                onColumnReorderStart={handleColumnReorderStart}
+                onColumnReorderEnd={handleColumnReorderEnd}
+                onColumnDragOver={handleColumnDragOver}
+                onColumnDragLeave={handleColumnDragLeave}
+                onColumnDrop={handleColumnDrop}
+                onTaskDragOver={handleTaskDragOver}
+                onTaskDrop={handleTaskDrop}
+              />
+            </div>
+
+            <BoardChatPanel
+              boardId={board.id}
+              currentUserId={account.id}
+              messages={chatMessages}
+              loading={chatLoading}
+              sending={chatSending}
+              error={chatError}
+              onSendMessage={handleChatSubmit}
+            />
+          </div>
         ) : (
           <BoardNotFound />
         )}
