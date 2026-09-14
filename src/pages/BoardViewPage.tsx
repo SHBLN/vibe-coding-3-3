@@ -12,6 +12,7 @@ import { BoardMembersPicker } from '../components/board/BoardMembersPicker'
 import { ColumnFormModal } from '../components/board/ColumnFormModal'
 import { DeleteColumnModal } from '../components/board/DeleteColumnModal'
 import { DeleteTaskModal } from '../components/board/DeleteTaskModal'
+import { TaskCommentsModal } from '../components/board/TaskCommentsModal'
 import { TaskFormModal, type TaskFormValues } from '../components/board/TaskFormModal'
 import { AccountBadge } from '../components/landing/AccountBadge'
 import { ButtonPrimary, LogoIcon } from '../components/landing/ui'
@@ -182,6 +183,10 @@ type TaskDeleteState = {
   columnId: string
 }
 
+type TaskCommentsState = {
+  task: BoardTask
+}
+
 type ColumnFormState =
   | {
       mode: 'create'
@@ -262,6 +267,18 @@ function TrashIcon({ className = 'h-3.5 w-3.5' }: { className?: string }) {
   )
 }
 
+function CommentIcon({ className = 'h-3.5 w-3.5' }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path
+        d="M21 15a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 function DragGripIcon({ className = 'h-4 w-4' }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -287,6 +304,7 @@ type TaskCardProps = {
   crudLocked: boolean
   onEdit: (task: BoardTask) => void
   onDelete: (task: BoardTask) => void
+  onOpenComments: (task: BoardTask) => void
   onAssigneeChange: (taskId: string, assigneeIds: string[]) => void | Promise<void>
   onDragStart: (event: DragEvent<HTMLElement>, taskId: string, columnId: string) => void
   onDragEnd: () => void
@@ -306,6 +324,7 @@ function TaskCard({
   crudLocked,
   onEdit,
   onDelete,
+  onOpenComments,
   onAssigneeChange,
   onDragStart,
   onDragEnd,
@@ -362,6 +381,15 @@ function TaskCard({
         </div>
         </div>
         <div className="flex shrink-0 gap-1 opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100" data-no-drag>
+          <button
+            type="button"
+            onClick={() => onOpenComments(task)}
+            disabled={crudLocked}
+            aria-label="Комментарии"
+            className="press-down rounded-lg p-1.5 text-navy/40 hover:bg-surface-alt hover:text-navy disabled:opacity-50"
+          >
+            <CommentIcon />
+          </button>
           <button
             type="button"
             onClick={() => onEdit(task)}
@@ -441,6 +469,7 @@ type BoardColumnSectionProps = {
   onDeleteColumn: (column: BoardViewColumn) => void
   onEditTask: (task: BoardTask) => void
   onDeleteTask: (task: BoardTask) => void
+  onOpenComments: (task: BoardTask) => void
   onAssigneeChange: (taskId: string, assigneeIds: string[]) => void | Promise<void>
   onDragStart: (event: DragEvent<HTMLElement>, taskId: string, columnId: string) => void
   onDragEnd: () => void
@@ -468,6 +497,7 @@ function BoardColumnSection({
   onDeleteColumn,
   onEditTask,
   onDeleteTask,
+  onOpenComments,
   onAssigneeChange,
   onDragStart,
   onDragEnd,
@@ -588,6 +618,7 @@ function BoardColumnSection({
                 crudLocked={crudLocked}
                 onEdit={onEditTask}
                 onDelete={onDeleteTask}
+                onOpenComments={onOpenComments}
                 onAssigneeChange={onAssigneeChange}
                 onDragStart={onDragStart}
                 onDragEnd={onDragEnd}
@@ -634,6 +665,7 @@ type BoardViewContentProps = {
   onDeleteColumn: (column: BoardViewColumn) => void
   onEditTask: (task: BoardTask) => void
   onDeleteTask: (task: BoardTask) => void
+  onOpenComments: (task: BoardTask) => void
   onAssigneeChange: (taskId: string, assigneeIds: string[]) => void | Promise<void>
   onDragStart: (event: DragEvent<HTMLElement>, taskId: string, columnId: string) => void
   onDragEnd: () => void
@@ -664,6 +696,7 @@ function BoardViewContent({
   onDeleteColumn,
   onEditTask,
   onDeleteTask,
+  onOpenComments,
   onAssigneeChange,
   onDragStart,
   onDragEnd,
@@ -734,6 +767,7 @@ function BoardViewContent({
               onDeleteColumn={onDeleteColumn}
               onEditTask={onEditTask}
               onDeleteTask={onDeleteTask}
+              onOpenComments={onOpenComments}
               onAssigneeChange={onAssigneeChange}
               onDragStart={onDragStart}
               onDragEnd={onDragEnd}
@@ -779,6 +813,7 @@ export function BoardViewPage() {
   const [assigneeError, setAssigneeError] = useState<string | null>(null)
   const [taskForm, setTaskForm] = useState<TaskFormState | null>(null)
   const [taskToDelete, setTaskToDelete] = useState<TaskDeleteState | null>(null)
+  const [taskComments, setTaskComments] = useState<TaskCommentsState | null>(null)
   const [columnForm, setColumnForm] = useState<ColumnFormState | null>(null)
   const [columnToDelete, setColumnToDelete] = useState<ColumnDeleteState | null>(null)
   const [crudBusy, setCrudBusy] = useState(false)
@@ -937,6 +972,15 @@ export function BoardViewPage() {
       const located = findTaskColumn(task.id)
       if (!located) return
       setTaskToDelete({ task: located.task, columnId: located.column.id })
+    },
+    [findTaskColumn],
+  )
+
+  const handleOpenComments = useCallback(
+    (task: BoardTask) => {
+      const located = findTaskColumn(task.id)
+      if (!located) return
+      setTaskComments({ task: located.task })
     },
     [findTaskColumn],
   )
@@ -1421,6 +1465,7 @@ export function BoardViewPage() {
             onDeleteColumn={handleOpenDeleteColumn}
             onEditTask={handleOpenEditTask}
             onDeleteTask={handleOpenDeleteTask}
+            onOpenComments={handleOpenComments}
             onAssigneeChange={handleAssigneeChange}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
@@ -1461,6 +1506,14 @@ export function BoardViewPage() {
         taskTitle={taskToDelete?.task.title ?? ''}
         onClose={() => setTaskToDelete(null)}
         onConfirm={handleConfirmDeleteTask}
+      />
+
+      <TaskCommentsModal
+        isOpen={taskComments !== null}
+        taskId={taskComments?.task.id ?? ''}
+        taskTitle={taskComments?.task.title ?? ''}
+        currentUserId={account?.id ?? null}
+        onClose={() => setTaskComments(null)}
       />
 
       <ColumnFormModal

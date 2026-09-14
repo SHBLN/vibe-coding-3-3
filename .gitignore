@@ -25,6 +25,8 @@ dist-ssr
 
 .env
 .env.local
+supabase/r2-secrets.env
+supabase/.temp/
 
 # Cloudflare local cache
 .wrangler/

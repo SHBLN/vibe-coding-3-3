@@ -406,3 +406,54 @@ flowchart TD
 - Создание карточки с приоритетом «Высокий» и описанием → данные видны на карточке и в форме редактирования.
 - Редактирование приоритета/описания → изменения сохраняются в Supabase.
 - Перезагрузка страницы → значения подтягиваются из БД.
+
+### 24) Комментарии к карточкам и вложения через Cloudflare R2
+- Добавлена таблица `public.task_comments`:
+  - `task_id`, `author_id`, `body`, `attachment_url`, `attachment_name`, `attachment_size`, `attachment_mime`, `created_at`;
+  - индекс по `task_id` и `created_at`;
+  - RLS-политики в модели доступа владельца доски, удаление только автором комментария.
+- Добавлена Edge Function `r2-upload-url`:
+  - проверяет JWT и доступ к задаче;
+  - валидирует `fileSize` и `contentType`;
+  - генерирует presigned `PUT` URL для Cloudflare R2;
+  - возвращает публичную ссылку `publicUrl`, которая сохраняется в БД.
+- На UI доски добавлена модалка комментариев `TaskCommentsModal`:
+  - список комментариев по задаче;
+  - создание комментария с текстом и/или файлом;
+  - удаление собственного комментария.
+- Реализован клиентский upload-поток:
+  1) запрос presigned URL у `r2-upload-url`;
+  2) загрузка файла напрямую в R2;
+  3) сохранение в `task_comments` только ссылки и метаданных файла.
+- Улучшена диагностика ошибок:
+  - если в Supabase не хватает `R2_*` secrets, функция возвращает список `missingKeys`;
+  - клиент показывает понятное сообщение пользователю вместо generic `non-2xx`.
+
+#### Новые/обновлённые файлы (R2 + comments)
+- `supabase/migrations/20260909180000_create_task_comments.sql`
+- `supabase/functions/r2-upload-url/index.ts`
+- `supabase/config.toml`
+- `src/components/board/TaskCommentsModal.tsx`
+- `src/lib/taskComments.ts`
+- `src/lib/r2Uploads.ts`
+- `src/pages/BoardViewPage.tsx`
+- `src/lib/database.types.ts`
+- `.env.example`
+- `.gitignore`
+
+#### Secrets для Edge Function
+Добавляются в Supabase Dashboard → Edge Functions → Secrets:
+
+```env
+R2_ACCOUNT_ID=...
+R2_BUCKET_NAME=...
+R2_PUBLIC_BASE_URL=...
+R2_ACCESS_KEY_ID=...
+R2_SECRET_ACCESS_KEY=...
+```
+
+#### Проверка
+- `npm run build` проходит успешно.
+- Комментарий без файла сохраняется в `task_comments`.
+- Комментарий с файлом загружает объект в R2, в Supabase сохраняется только ссылка и метаданные.
+- Ссылка из `attachment_url` открывает загруженный файл при корректном CORS/Public URL.
