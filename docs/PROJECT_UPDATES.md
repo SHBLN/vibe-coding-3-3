@@ -503,11 +503,13 @@ R2_SECRET_ACCESS_KEY=...
 
 Edge Function: `supabase/functions/telegram-ok-reply/index.ts`
 
-Поведение: Telegram шлёт update на webhook, функция отвечает `ок` на любое сообщение.
+Поведение: Telegram шлёт update на webhook. Бот показывает кнопку `Список досок`, по ней возвращает все доски системы; на остальные сообщения отвечает `ок`.
 
 Полная документация: [`docs/TELEGRAM_BOT.md`](TELEGRAM_BOT.md)
 
 Кратко:
+- `/start` — приветствие и reply-клавиатура с кнопкой `Список досок`;
+- `Список досок` / `/boards` — список всех записей из `public.boards`;
 - секреты — Supabase Vault (`telegram_bot_token`, `telegram_poll_secret`) или env Edge Function;
 - деплой — `supabase functions deploy telegram-ok-reply`;
 - webhook — `setWebhook` на URL функции с тем же `secret_token`.

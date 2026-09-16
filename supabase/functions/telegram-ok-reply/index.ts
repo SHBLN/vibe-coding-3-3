@@ -2,6 +2,8 @@ import { createClient } from 'npm:@supabase/supabase-js@2'
 
 const TELEGRAM_API_BASE = 'https://api.telegram.org'
 const REPLY_TEXT = 'ок'
+const BOARDS_BUTTON_TEXT = 'Список досок'
+const MAX_BOARDS_IN_MESSAGE = 30
 
 type TelegramChat = {
   id: number
@@ -9,6 +11,7 @@ type TelegramChat = {
 
 type TelegramMessage = {
   chat?: TelegramChat
+  text?: string
 }
 
 type TelegramUpdate = {
@@ -23,6 +26,24 @@ type BotSecretsRow = {
   poll_secret: string | null
 }
 
+type BoardRow = {
+  id: string
+  title: string
+  created_at: string
+}
+
+type ReplyMarkup = {
+  keyboard: Array<Array<{ text: string }>>
+  resize_keyboard: boolean
+  one_time_keyboard: boolean
+}
+
+const MAIN_KEYBOARD: ReplyMarkup = {
+  keyboard: [[{ text: BOARDS_BUTTON_TEXT }]],
+  resize_keyboard: true,
+  one_time_keyboard: false,
+}
+
 function jsonResponse(body: Record<string, unknown>, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -30,13 +51,26 @@ function jsonResponse(body: Record<string, unknown>, status = 200): Response {
   })
 }
 
-function extractChatId(update: TelegramUpdate): number | null {
-  const chat =
-    update.message?.chat ??
-    update.edited_message?.chat ??
-    update.channel_post?.chat
+function extractMessage(update: TelegramUpdate): TelegramMessage | null {
+  return update.message ?? update.edited_message ?? update.channel_post ?? null
+}
 
-  return typeof chat?.id === 'number' ? chat.id : null
+function extractChatId(update: TelegramUpdate): number | null {
+  const message = extractMessage(update)
+  return typeof message?.chat?.id === 'number' ? message.chat.id : null
+}
+
+function extractMessageText(update: TelegramUpdate): string {
+  const message = extractMessage(update)
+  return typeof message?.text === 'string' ? message.text.trim() : ''
+}
+
+function isStartCommand(text: string): boolean {
+  return text === '/start' || text.startsWith('/start ')
+}
+
+function isBoardsRequest(text: string): boolean {
+  return text === BOARDS_BUTTON_TEXT || text === '/boards'
 }
 
 async function readBotSecrets(
@@ -70,20 +104,84 @@ async function sendTelegramMessage(
   botToken: string,
   chatId: number,
   text: string,
+  replyMarkup?: ReplyMarkup,
 ): Promise<void> {
+  const body: Record<string, unknown> = {
+    chat_id: chatId,
+    text,
+  }
+
+  if (replyMarkup) {
+    body.reply_markup = replyMarkup
+  }
+
   const response = await fetch(`${TELEGRAM_API_BASE}/bot${botToken}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text,
-    }),
+    body: JSON.stringify(body),
   })
 
   if (!response.ok) {
     const errorText = await response.text()
     throw new Error(`Telegram sendMessage failed (${response.status}): ${errorText}`)
   }
+}
+
+async function fetchAllBoards(
+  supabase: ReturnType<typeof createClient>,
+): Promise<BoardRow[]> {
+  const { data, error } = await supabase
+    .from('boards')
+    .select('id, title, created_at')
+    .order('created_at', { ascending: true })
+    .returns<BoardRow[]>()
+
+  if (error) throw new Error(error.message)
+  return data ?? []
+}
+
+function formatBoardList(boards: BoardRow[]): string {
+  if (boards.length === 0) {
+    return 'Досок пока нет.'
+  }
+
+  const visibleBoards = boards.slice(0, MAX_BOARDS_IN_MESSAGE)
+  const lines = visibleBoards.map(
+    (board, index) => `${index + 1}. ${board.title} (${board.id})`,
+  )
+
+  const remaining = boards.length - visibleBoards.length
+  if (remaining > 0) {
+    lines.push(`и еще ${remaining}...`)
+  }
+
+  return ['Доски в системе:', ...lines].join('\n')
+}
+
+async function handleIncomingMessage(
+  botToken: string,
+  chatId: number,
+  text: string,
+  supabase: ReturnType<typeof createClient>,
+): Promise<{ action: string; count?: number }> {
+  if (isStartCommand(text)) {
+    await sendTelegramMessage(
+      botToken,
+      chatId,
+      'Привет! Нажми кнопку ниже, чтобы получить список всех досок.',
+      MAIN_KEYBOARD,
+    )
+    return { action: 'start' }
+  }
+
+  if (isBoardsRequest(text)) {
+    const boards = await fetchAllBoards(supabase)
+    await sendTelegramMessage(botToken, chatId, formatBoardList(boards), MAIN_KEYBOARD)
+    return { action: 'boards_list', count: boards.length }
+  }
+
+  await sendTelegramMessage(botToken, chatId, REPLY_TEXT, MAIN_KEYBOARD)
+  return { action: 'fallback_ok' }
 }
 
 Deno.serve(async (req) => {
@@ -136,9 +234,11 @@ Deno.serve(async (req) => {
     return jsonResponse({ ok: true, skipped: 'no chat id' })
   }
 
+  const text = extractMessageText(update)
+
   try {
-    await sendTelegramMessage(botToken, chatId, REPLY_TEXT)
-    return jsonResponse({ ok: true, mode: 'webhook' })
+    const result = await handleIncomingMessage(botToken, chatId, text, supabase)
+    return jsonResponse({ ok: true, mode: 'webhook', ...result })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to send Telegram message'
     console.error(message)

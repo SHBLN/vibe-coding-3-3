@@ -1,6 +1,6 @@
 # Telegram-бот `telegram-ok-reply`
 
-Минимальный Telegram-бот на Supabase Edge Function: на любое входящее сообщение отвечает `ок`.
+Telegram-бот на Supabase Edge Function: показывает список всех досок по кнопке и отвечает `ок` на остальные сообщения.
 
 ## Архитектура
 
@@ -16,8 +16,9 @@ sequenceDiagram
     EF->>EF: проверка x-telegram-bot-api-secret-token
     EF->>Vault: get_telegram_bot_secrets()
     Vault-->>EF: bot_token, webhook_secret
-    EF->>TG: sendMessage("ок")
-    TG->>User: ответ "ок"
+    EF->>EF: маршрутизация команды
+    EF->>TG: sendMessage(ответ + клавиатура)
+    TG->>User: ответ бота
 ```
 
 ## Файлы
@@ -86,6 +87,31 @@ curl "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/getWebhookInfo"
 
 Ожидаемый результат: `url` указывает на Edge Function, `pending_update_count: 0`.
 
+## Быстрый старт для пользователя бота
+
+1. Откройте бота в Telegram и отправьте `/start`.
+2. Нажмите кнопку **Список досок** внизу экрана.
+3. Бот пришлёт список всех досок в системе.
+4. Любое другое сообщение получит ответ `ок`.
+
+## Команды и кнопки
+
+| Ввод пользователя | Ответ бота |
+|-------------------|------------|
+| `/start` | Приветствие + постоянная кнопка `Список досок` |
+| `Список досок` или `/boards` | Список всех досок из `public.boards` |
+| Любой другой текст | `ок` |
+
+Формат списка досок:
+
+```
+Доски в системе:
+1. Название доски (uuid)
+2. Другая доска (uuid)
+```
+
+Если досок больше 30, сообщение обрезается и добавляется строка `и еще N...`.
+
 ## Поведение endpoint
 
 | Метод | Ответ |
@@ -93,7 +119,7 @@ curl "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/getWebhookInfo"
 | `GET` | `ok` (healthcheck) |
 | `POST` без валидного secret | `401 Unauthorized` |
 | `POST` с update без chat.id | `200`, без отправки сообщения |
-| `POST` с сообщением | `200`, бот отвечает `ок` |
+| `POST` с сообщением | `200`, бот отвечает по таблице выше |
 
 Telegram передаёт secret в заголовке `x-telegram-bot-api-secret-token`.
 
@@ -110,6 +136,7 @@ supabase functions serve telegram-ok-reply --env-file supabase/.env.local --no-v
 - Токен бота только на сервере (Vault / env Edge Function).
 - Webhook проверяет `secret_token` — без него update отклоняется.
 - RPC `get_telegram_bot_secrets()` недоступен для `anon` и `authenticated`.
+- Список досок читается через `SUPABASE_SERVICE_ROLE_KEY` — возвращаются **все** доски системы, без фильтра по пользователю.
 - Не коммитьте токены в git.
 
 ## Troubleshooting
