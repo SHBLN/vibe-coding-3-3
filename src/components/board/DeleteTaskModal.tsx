@@ -2,17 +2,20 @@ import { useEffect, useRef, useState } from 'react'
 
 type DeleteTaskModalProps = {
   isOpen: boolean
-  taskTitle: string
+  taskTitle?: string
+  taskCount?: number
   onClose: () => void
   onConfirm: () => Promise<void>
 }
 
 export function DeleteTaskModal({
   isOpen,
-  taskTitle,
+  taskTitle = '',
+  taskCount = 1,
   onClose,
   onConfirm,
 }: DeleteTaskModalProps) {
+  const isBulk = taskCount > 1
   const panelRef = useRef<HTMLDivElement>(null)
   const [loading, setLoading] = useState(false)
 
@@ -63,14 +66,24 @@ export function DeleteTaskModal({
       >
         <div className="border-b border-navy/10 px-6 py-5">
           <h2 id="delete-task-title" className="text-lg font-black tracking-tight text-navy">
-            Удалить карточку?
+            {isBulk ? `Удалить ${taskCount} карточек?` : 'Удалить карточку?'}
           </h2>
         </div>
 
         <div className="px-6 py-6">
           <p className="text-sm text-navy/70">
-            Карточка «<span className="font-semibold text-navy">{taskTitle}</span>» будет удалена
-            без возможности восстановления.
+            {isBulk ? (
+              <>
+                Будет удалено карточек:{' '}
+                <span className="font-semibold text-navy">{taskCount}</span>. Восстановить их
+                будет нельзя.
+              </>
+            ) : (
+              <>
+                Карточка «<span className="font-semibold text-navy">{taskTitle}</span>» будет
+                удалена без возможности восстановления.
+              </>
+            )}
           </p>
 
           <div className="mt-6 flex gap-3">

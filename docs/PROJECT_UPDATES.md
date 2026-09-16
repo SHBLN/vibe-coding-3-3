@@ -503,13 +503,46 @@ R2_SECRET_ACCESS_KEY=...
 
 Edge Function: `supabase/functions/telegram-ok-reply/index.ts`
 
-Поведение: Telegram шлёт update на webhook. Бот показывает кнопку `Список досок`, по ней возвращает все доски системы; на остальные сообщения отвечает `ок`.
+Поведение: Telegram шлёт update на webhook. Бот показывает доски владельца и создаёт глобальные задачи через AI с выбором доски (inline-кнопки). На остальные сообщения отвечает `ок`.
 
 Полная документация: [`docs/TELEGRAM_BOT.md`](TELEGRAM_BOT.md)
 
 Кратко:
-- `/start` — приветствие и reply-клавиатура с кнопкой `Список досок`;
-- `Список досок` / `/boards` — список всех записей из `public.boards`;
+- `/start` — приветствие и кнопки `Список досок`, `Создать задачу`;
+- `Список досок` / `/boards` — доски пользователя по `telegram_username`;
+- `Создать задачу` — inline-выбор доски → текст задачи → `anymodel-chat` (Telegram internal mode);
+- сессия диалога хранится в `telegram_task_sessions`;
+- нужен секрет `TELEGRAM_INTERNAL_SECRET` на обеих Edge Functions;
+- username задаётся в «Настройках» веб-приложения;
 - секреты — Supabase Vault (`telegram_bot_token`, `telegram_poll_secret`) или env Edge Function;
 - деплой — `supabase functions deploy telegram-ok-reply`;
 - webhook — `setWebhook` на URL функции с тем же `secret_token`.
+
+### 27) Telegram-уведомления о назначении задач (UI + AI)
+- Добавлен серверный pipeline уведомлений о назначении через `task_assignees` без дублирования логики на клиенте.
+- Применены миграции:
+  - `20260916190000_telegram_assignment_notifications.sql`;
+  - `20260916190500_telegram_assignment_notify_cron.sql`.
+- Добавлены объекты БД:
+  - `telegram_profile_links` (`profile_id`, `chat_id`, `telegram_username`, `last_seen_at`);
+  - `telegram_assignment_notifications` (очередь отправок, `status`, `attempts`, `error`);
+  - trigger `task_assignees_enqueue_telegram_notification`;
+  - функция `invoke_telegram_assignment_notify()` + cron-job `telegram-assignment-notify` (каждые 2 минуты).
+- В `telegram-ok-reply` добавлен upsert связи профиля и Telegram-чата при валидных update.
+- Добавлена Edge Function `telegram-assignment-notify`:
+  - выбирает `pending`/retry записи из очереди;
+  - отправляет Telegram `sendMessage`;
+  - отмечает `sent`, при ошибках обновляет `attempts` и оставляет в retry.
+- Обновлены TS-типы БД (`src/lib/database.types.ts`) для новых таблиц Telegram.
+
+#### Поведение
+- Назначение из UI или AI автоматически пишет в `task_assignees` -> trigger ставит задачу в очередь.
+- Уведомление отправляется только профилям с подтвержденной связью в `telegram_profile_links`.
+- Дубли предотвращаются уникальным ключом по `task_id + profile_id`.
+- Ошибки Telegram API не ломают транзакцию назначения: карточка назначается, доставка уходит в retry.
+
+#### Что проверить
+- Пользователь пишет `/start` (или другое сообщение) и получает запись в `telegram_profile_links`.
+- Ручное назначение карточки из доски отправляет одно уведомление подключенному исполнителю.
+- AI-назначения из `anymodel-chat` также попадают в очередь и отправляются.
+- Профиль без связи не получает уведомление.

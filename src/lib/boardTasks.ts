@@ -578,6 +578,42 @@ export async function deleteTask(
   await normalizeColumnPositions(boardId, columnId, status, remainingTaskIds)
 }
 
+export async function deleteTasks(
+  boardId: string,
+  taskIds: string[],
+  columns: BoardViewColumn[],
+): Promise<void> {
+  if (taskIds.length === 0) return
+
+  const idsToDelete = new Set(taskIds)
+
+  const { error: deleteError } = await supabase
+    .from('tasks')
+    .delete()
+    .eq('board_id', boardId)
+    .in('id', [...idsToDelete])
+
+  if (deleteError) throw new Error(deleteError.message)
+
+  const affectedColumnIds = new Set<string>()
+  for (const column of columns) {
+    if (column.tasks.some((task) => idsToDelete.has(task.id))) {
+      affectedColumnIds.add(column.id)
+    }
+  }
+
+  for (const columnId of affectedColumnIds) {
+    const column = columns.find((item) => item.id === columnId)
+    if (!column) continue
+
+    const remainingTaskIds = column.tasks
+      .filter((task) => !idsToDelete.has(task.id))
+      .map((task) => task.id)
+
+    await normalizeColumnPositions(boardId, columnId, column.statusKey, remainingTaskIds)
+  }
+}
+
 export async function syncTaskAssignees(taskId: string, assigneeIds: string[]): Promise<void> {
   const { data: existingRows, error: existingError } = await supabase
     .from('task_assignees')

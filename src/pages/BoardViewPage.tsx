@@ -33,6 +33,7 @@ import {
   createTask,
   deleteBoardColumn,
   deleteTask,
+  deleteTasks,
   fetchBoardView,
   reindexBoardColumns,
   saveBoardColumnsState,
@@ -193,6 +194,10 @@ type TaskDeleteState = {
   columnId: string
 }
 
+type TasksBulkDeleteState = {
+  taskIds: string[]
+}
+
 type TaskCommentsState = {
   task: BoardTask
 }
@@ -312,6 +317,9 @@ type TaskCardProps = {
   assigneeSaving: boolean
   assigneeError: string | null
   crudLocked: boolean
+  selectionMode: boolean
+  isSelected: boolean
+  onToggleSelect: (taskId: string) => void
   onEdit: (task: BoardTask) => void
   onDelete: (task: BoardTask) => void
   onOpenComments: (task: BoardTask) => void
@@ -332,6 +340,9 @@ function TaskCard({
   assigneeSaving,
   assigneeError,
   crudLocked,
+  selectionMode,
+  isSelected,
+  onToggleSelect,
   onEdit,
   onDelete,
   onOpenComments,
@@ -350,25 +361,41 @@ function TaskCard({
 
   return (
     <article
-      draggable
+      draggable={!selectionMode}
+      onClick={() => {
+        if (selectionMode) onToggleSelect(task.id)
+      }}
       onDragStart={(event) => onDragStart(event, task.id, columnId)}
       onDragEnd={onDragEnd}
       onDragOver={(event) => onDragOver(event, columnId, task.id)}
       onDrop={(event) => onDrop(event, columnId, task.id)}
       className={`group flex min-h-[210px] sm:min-h-[220px] flex-col overflow-hidden rounded-xl border bg-white p-4 shadow-sm transition ${
-        isDragging
-          ? 'cursor-grabbing border-accent/40 opacity-50 shadow-none'
-          : 'hover-lift cursor-grab border-navy/10 hover:border-accent/30 hover:shadow-card'
+        selectionMode
+          ? `cursor-pointer ${isSelected ? 'border-accent ring-2 ring-accent/25' : 'border-navy/10 hover:border-accent/30'}`
+          : isDragging
+            ? 'cursor-grabbing border-accent/40 opacity-50 shadow-none'
+            : 'hover-lift cursor-grab border-navy/10 hover:border-accent/30 hover:shadow-card'
       } ${isDropTarget ? 'border-t-2 border-t-accent ring-2 ring-accent/20' : ''}`}
     >
       <div className="mb-2 flex items-start justify-between gap-2">
         <div className="flex min-w-0 flex-1 items-start gap-2">
-        <span
-          className="mt-0.5 shrink-0 rounded-md p-0.5 text-navy/25 transition group-hover:text-navy/45"
-          aria-hidden="true"
-        >
-          <DragGripIcon />
-        </span>
+        {selectionMode ? (
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={() => onToggleSelect(task.id)}
+            onClick={(event) => event.stopPropagation()}
+            aria-label={`Выбрать «${task.title}»`}
+            className="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded border-navy/20 text-accent focus:ring-accent/30"
+          />
+        ) : (
+          <span
+            className="mt-0.5 shrink-0 rounded-md p-0.5 text-navy/25 transition group-hover:text-navy/45"
+            aria-hidden="true"
+          >
+            <DragGripIcon />
+          </span>
+        )}
         <div className="flex min-w-0 flex-1 flex-wrap items-start gap-2">
         {task.kind === 'epic' ? (
           <span className="rounded-full bg-navy/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-navy/70">
@@ -390,34 +417,41 @@ function TaskCard({
         ))}
         </div>
         </div>
-        <div className="flex shrink-0 gap-1 opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100" data-no-drag>
-          <button
-            type="button"
-            onClick={() => onOpenComments(task)}
-            disabled={crudLocked}
-            aria-label="Комментарии"
-            className="press-down rounded-lg p-1.5 text-navy/40 hover:bg-surface-alt hover:text-navy disabled:opacity-50"
-          >
-            <CommentIcon />
-          </button>
-          <button
-            type="button"
-            onClick={() => onEdit(task)}
-            disabled={crudLocked}
-            aria-label="Редактировать карточку"
-            className="press-down rounded-lg p-1.5 text-navy/40 hover:bg-surface-alt hover:text-navy disabled:opacity-50"
-          >
-            <PencilIcon />
-          </button>
-          <button
-            type="button"
-            onClick={() => onDelete(task)}
-            disabled={crudLocked}
-            aria-label="Удалить карточку"
-            className="press-down rounded-lg p-1.5 text-navy/40 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
-          >
-            <TrashIcon />
-          </button>
+        <div
+          className={`flex shrink-0 gap-1 transition ${selectionMode ? 'opacity-100' : 'opacity-100 sm:opacity-0 sm:group-hover:opacity-100'}`}
+          data-no-drag
+        >
+          {!selectionMode ? (
+            <>
+              <button
+                type="button"
+                onClick={() => onOpenComments(task)}
+                disabled={crudLocked}
+                aria-label="Комментарии"
+                className="press-down rounded-lg p-1.5 text-navy/40 hover:bg-surface-alt hover:text-navy disabled:opacity-50"
+              >
+                <CommentIcon />
+              </button>
+              <button
+                type="button"
+                onClick={() => onEdit(task)}
+                disabled={crudLocked}
+                aria-label="Редактировать карточку"
+                className="press-down rounded-lg p-1.5 text-navy/40 hover:bg-surface-alt hover:text-navy disabled:opacity-50"
+              >
+                <PencilIcon />
+              </button>
+              <button
+                type="button"
+                onClick={() => onDelete(task)}
+                disabled={crudLocked}
+                aria-label="Удалить карточку"
+                className="press-down rounded-lg p-1.5 text-navy/40 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+              >
+                <TrashIcon />
+              </button>
+            </>
+          ) : null}
         </div>
       </div>
 
@@ -474,6 +508,9 @@ type BoardColumnSectionProps = {
   savingTaskId: string | null
   assigneeError: string | null
   crudLocked: boolean
+  selectionMode: boolean
+  selectedTaskIds: Set<string>
+  onToggleTaskSelect: (taskId: string) => void
   onCreateTask: (columnId: string) => void
   onEditColumn: (column: BoardViewColumn) => void
   onDeleteColumn: (column: BoardViewColumn) => void
@@ -502,6 +539,9 @@ function BoardColumnSection({
   savingTaskId,
   assigneeError,
   crudLocked,
+  selectionMode,
+  selectedTaskIds,
+  onToggleTaskSelect,
   onCreateTask,
   onEditColumn,
   onDeleteColumn,
@@ -565,7 +605,7 @@ function BoardColumnSection({
             <button
               type="button"
               onClick={() => onEditColumn(column)}
-              disabled={crudLocked}
+              disabled={crudLocked || selectionMode}
               aria-label="Редактировать колонку"
               className="press-down rounded-lg p-1.5 text-navy/40 hover:bg-white hover:text-navy disabled:opacity-50"
             >
@@ -575,7 +615,7 @@ function BoardColumnSection({
               <button
                 type="button"
                 onClick={() => onDeleteColumn(column)}
-                disabled={crudLocked}
+                disabled={crudLocked || selectionMode}
                 aria-label="Удалить колонку"
                 className="press-down rounded-lg p-1.5 text-navy/40 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
               >
@@ -585,7 +625,7 @@ function BoardColumnSection({
             <button
               type="button"
               onClick={() => onCreateTask(column.id)}
-              disabled={crudLocked}
+              disabled={crudLocked || selectionMode}
               className="press-down rounded-xl border border-navy/10 bg-white px-2.5 py-1.5 text-[11px] font-bold text-navy/60 hover:border-accent/40 hover:text-accent disabled:opacity-50"
             >
               + Карточка
@@ -626,6 +666,9 @@ function BoardColumnSection({
                 assigneeSaving={savingTaskId === task.id}
                 assigneeError={savingTaskId === task.id ? assigneeError : null}
                 crudLocked={crudLocked}
+                selectionMode={selectionMode}
+                isSelected={selectedTaskIds.has(task.id)}
+                onToggleSelect={onToggleTaskSelect}
                 onEdit={onEditTask}
                 onDelete={onDeleteTask}
                 onOpenComments={onOpenComments}
@@ -668,6 +711,13 @@ type BoardViewContentProps = {
   savingTaskId: string | null
   assigneeError: string | null
   crudLocked: boolean
+  selectionMode: boolean
+  selectedTaskIds: Set<string>
+  onToggleSelectionMode: () => void
+  onToggleTaskSelect: (taskId: string) => void
+  onSelectAllTasks: () => void
+  onClearSelection: () => void
+  onBulkDelete: () => void
   onBoardMembersChange: (ids: string[]) => void
   onCreateColumn: () => void
   onCreateTask: (columnId: string) => void
@@ -699,6 +749,13 @@ function BoardViewContent({
   savingTaskId,
   assigneeError,
   crudLocked,
+  selectionMode,
+  selectedTaskIds,
+  onToggleSelectionMode,
+  onToggleTaskSelect,
+  onSelectAllTasks,
+  onClearSelection,
+  onBulkDelete,
   onBoardMembersChange,
   onCreateColumn,
   onCreateTask,
@@ -719,6 +776,7 @@ function BoardViewContent({
   onTaskDrop,
 }: BoardViewContentProps) {
   const totalTasks = columns.reduce((sum, column) => sum + column.tasks.length, 0)
+  const selectedCount = selectedTaskIds.size
 
   return (
     <>
@@ -748,15 +806,64 @@ function BoardViewContent({
           </div>
         </div>
 
-        <div className="shrink-0">
-          <BoardMembersPicker
-            profiles={profiles}
-            profilesError={profilesError}
-            selectedMemberIds={boardMemberIds}
-            onChange={onBoardMembersChange}
-          />
+        <div className="flex shrink-0 flex-col items-end gap-3">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={onToggleSelectionMode}
+              disabled={crudLocked && !selectionMode}
+              className={`press-down rounded-xl border px-3 py-2 text-xs font-bold transition disabled:opacity-50 ${
+                selectionMode
+                  ? 'border-accent bg-accent/10 text-accent-dark'
+                  : 'border-navy/10 bg-white text-navy/70 hover:border-accent/40 hover:text-accent'
+              }`}
+            >
+              {selectionMode ? 'Готово' : 'Выбрать карточки'}
+            </button>
+            <BoardMembersPicker
+              profiles={profiles}
+              profilesError={profilesError}
+              selectedMemberIds={boardMemberIds}
+              onChange={onBoardMembersChange}
+            />
+          </div>
         </div>
       </div>
+
+      {selectionMode ? (
+        <div className="motion-fade-in mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-accent/20 bg-accent/5 px-4 py-3">
+          <span className="text-sm font-semibold text-navy">
+            Выбрано: {selectedCount}
+            {totalTasks > 0 ? ` из ${totalTasks}` : ''}
+          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={onSelectAllTasks}
+              disabled={totalTasks === 0}
+              className="rounded-xl border border-navy/10 bg-white px-3 py-2 text-xs font-bold text-navy/70 transition hover:border-accent/40 hover:text-accent disabled:opacity-50"
+            >
+              Выбрать все
+            </button>
+            <button
+              type="button"
+              onClick={onClearSelection}
+              disabled={selectedCount === 0}
+              className="rounded-xl border border-navy/10 bg-white px-3 py-2 text-xs font-bold text-navy/70 transition hover:border-accent/40 hover:text-accent disabled:opacity-50"
+            >
+              Снять выбор
+            </button>
+            <button
+              type="button"
+              onClick={onBulkDelete}
+              disabled={selectedCount === 0 || crudLocked}
+              className="rounded-xl bg-red-500 px-3 py-2 text-xs font-bold text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Удалить ({selectedCount})
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <div className="-mx-4 overflow-x-auto px-4 pb-4 sm:-mx-6 sm:px-6 lg:-mx-10 lg:px-10">
         <div className="flex min-w-min gap-4">
@@ -772,6 +879,9 @@ function BoardViewContent({
               savingTaskId={savingTaskId}
               assigneeError={assigneeError}
               crudLocked={crudLocked}
+              selectionMode={selectionMode}
+              selectedTaskIds={selectedTaskIds}
+              onToggleTaskSelect={onToggleTaskSelect}
               onCreateTask={onCreateTask}
               onEditColumn={onEditColumn}
               onDeleteColumn={onDeleteColumn}
@@ -794,7 +904,7 @@ function BoardViewContent({
           <button
             type="button"
             onClick={onCreateColumn}
-            disabled={crudLocked}
+            disabled={crudLocked || selectionMode}
             className="press-down flex h-[120px] w-[312px] shrink-0 items-center justify-center rounded-2xl border border-dashed border-navy/15 bg-white/60 text-sm font-bold text-navy/45 transition hover:border-accent/40 hover:bg-accent/5 hover:text-accent disabled:opacity-50"
           >
             + Колонка
@@ -823,6 +933,9 @@ export function BoardViewPage() {
   const [assigneeError, setAssigneeError] = useState<string | null>(null)
   const [taskForm, setTaskForm] = useState<TaskFormState | null>(null)
   const [taskToDelete, setTaskToDelete] = useState<TaskDeleteState | null>(null)
+  const [tasksBulkDelete, setTasksBulkDelete] = useState<TasksBulkDeleteState | null>(null)
+  const [selectionMode, setSelectionMode] = useState(false)
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(() => new Set())
   const [taskComments, setTaskComments] = useState<TaskCommentsState | null>(null)
   const [columnForm, setColumnForm] = useState<ColumnFormState | null>(null)
   const [columnToDelete, setColumnToDelete] = useState<ColumnDeleteState | null>(null)
@@ -843,6 +956,20 @@ export function BoardViewPage() {
     savingTaskId !== null ||
     dragState.activeTaskId !== null ||
     columnDragState.activeColumnId !== null
+
+  useEffect(() => {
+    if (!selectionMode) return
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setSelectionMode(false)
+        setSelectedTaskIds(new Set())
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [selectionMode])
 
   const findColumnById = useCallback(
     (columnId: string) => columns.find((column) => column.id === columnId) ?? null,
@@ -1125,6 +1252,41 @@ export function BoardViewPage() {
     [findTaskColumn],
   )
 
+  const handleToggleSelectionMode = useCallback(() => {
+    setSelectionMode((prev) => {
+      if (prev) setSelectedTaskIds(new Set())
+      return !prev
+    })
+  }, [])
+
+  const handleToggleTaskSelect = useCallback((taskId: string) => {
+    setSelectedTaskIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(taskId)) next.delete(taskId)
+      else next.add(taskId)
+      return next
+    })
+  }, [])
+
+  const handleSelectAllTasks = useCallback(() => {
+    const allIds = columns.flatMap((column) => column.tasks.map((task) => task.id))
+    setSelectedTaskIds(new Set(allIds))
+  }, [columns])
+
+  const handleClearSelection = useCallback(() => {
+    setSelectedTaskIds(new Set())
+  }, [])
+
+  const handleOpenBulkDelete = useCallback(() => {
+    if (selectedTaskIds.size === 0) return
+    setTasksBulkDelete({ taskIds: [...selectedTaskIds] })
+  }, [selectedTaskIds])
+
+  const handleCloseDeleteModal = useCallback(() => {
+    setTaskToDelete(null)
+    setTasksBulkDelete(null)
+  }, [])
+
   const handleOpenComments = useCallback(
     (task: BoardTask) => {
       const located = findTaskColumn(task.id)
@@ -1264,6 +1426,36 @@ export function BoardViewPage() {
     }
   }, [boardId, taskToDelete, findColumnById])
 
+  const handleConfirmBulkDelete = useCallback(async () => {
+    if (!boardId || !tasksBulkDelete) return
+
+    const idsToDelete = new Set(tasksBulkDelete.taskIds)
+    const previousColumns = columnsRef.current
+
+    setBoardError(null)
+    setCrudBusy(true)
+
+    setColumns((prev) =>
+      prev.map((column) => ({
+        ...column,
+        tasks: column.tasks.filter((task) => !idsToDelete.has(task.id)),
+      })),
+    )
+
+    try {
+      await deleteTasks(boardId, tasksBulkDelete.taskIds, previousColumns)
+      setSelectedTaskIds(new Set())
+      setSelectionMode(false)
+    } catch (err) {
+      setColumns(previousColumns)
+      const message = err instanceof Error ? err.message : 'Не удалось удалить карточки.'
+      setBoardError(message)
+      throw new Error(message)
+    } finally {
+      setCrudBusy(false)
+    }
+  }, [boardId, tasksBulkDelete])
+
   const handleColumnFormSubmit = useCallback(
     async (title: string) => {
       if (!boardId || !columnForm) return
@@ -1353,6 +1545,11 @@ export function BoardViewPage() {
 
   const handleDragStart = useCallback(
     (event: DragEvent<HTMLElement>, taskId: string, columnId: string) => {
+      if (selectionMode) {
+        event.preventDefault()
+        return
+      }
+
       if (isInteractiveDragTarget(event.target)) {
         event.preventDefault()
         return
@@ -1370,7 +1567,7 @@ export function BoardViewPage() {
         overTaskId: null,
       })
     },
-    [],
+    [selectionMode],
   )
 
   const handleDragEnd = useCallback(() => {
@@ -1380,7 +1577,7 @@ export function BoardViewPage() {
 
   const handleColumnReorderStart = useCallback(
     (event: DragEvent<HTMLElement>, columnId: string) => {
-      if (crudBusy || savingTaskId !== null || dragState.activeTaskId !== null) {
+      if (selectionMode || crudBusy || savingTaskId !== null || dragState.activeTaskId !== null) {
         event.preventDefault()
         return
       }
@@ -1396,7 +1593,7 @@ export function BoardViewPage() {
         overColumnId: columnId,
       })
     },
-    [crudBusy, savingTaskId, dragState.activeTaskId],
+    [selectionMode, crudBusy, savingTaskId, dragState.activeTaskId],
   )
 
   const handleColumnReorderEnd = useCallback(() => {
@@ -1581,7 +1778,15 @@ export function BoardViewPage() {
             </span>
           </Link>
 
-          <AccountBadge account={account} onSignOut={handleSignOut} />
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Link
+              to="/settings"
+              className="rounded-xl border border-navy/10 bg-white px-3 py-2 text-xs font-bold text-navy/70 transition hover:border-accent hover:text-accent"
+            >
+              Настройки
+            </Link>
+            <AccountBadge account={account} onSignOut={handleSignOut} />
+          </div>
         </div>
       </header>
 
@@ -1609,6 +1814,13 @@ export function BoardViewPage() {
                 savingTaskId={savingTaskId}
                 assigneeError={assigneeError}
                 crudLocked={crudLocked}
+                selectionMode={selectionMode}
+                selectedTaskIds={selectedTaskIds}
+                onToggleSelectionMode={handleToggleSelectionMode}
+                onToggleTaskSelect={handleToggleTaskSelect}
+                onSelectAllTasks={handleSelectAllTasks}
+                onClearSelection={handleClearSelection}
+                onBulkDelete={handleOpenBulkDelete}
                 onBoardMembersChange={setBoardMemberIds}
                 onCreateColumn={handleOpenCreateColumn}
                 onCreateTask={handleOpenCreateTask}
@@ -1665,10 +1877,11 @@ export function BoardViewPage() {
       />
 
       <DeleteTaskModal
-        isOpen={taskToDelete !== null}
+        isOpen={taskToDelete !== null || tasksBulkDelete !== null}
         taskTitle={taskToDelete?.task.title ?? ''}
-        onClose={() => setTaskToDelete(null)}
-        onConfirm={handleConfirmDeleteTask}
+        taskCount={tasksBulkDelete?.taskIds.length ?? 1}
+        onClose={handleCloseDeleteModal}
+        onConfirm={tasksBulkDelete ? handleConfirmBulkDelete : handleConfirmDeleteTask}
       />
 
       <TaskCommentsModal

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState, type CSSProperties, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { AccountBadge } from '../components/landing/AccountBadge'
 import { ButtonPrimary, LogoIcon } from '../components/landing/ui'
 import { useAuth } from '../hooks/useAuth'
@@ -441,7 +441,15 @@ export function BoardsPage() {
             </span>
           </a>
 
-          <AccountBadge account={account} onSignOut={handleSignOut} />
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Link
+              to="/settings"
+              className="rounded-xl border border-navy/10 bg-white px-3 py-2 text-xs font-bold text-navy/70 transition hover:border-accent hover:text-accent"
+            >
+              Настройки
+            </Link>
+            <AccountBadge account={account} onSignOut={handleSignOut} />
+          </div>
         </div>
       </header>
 

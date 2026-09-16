@@ -133,18 +133,21 @@ export type Database = {
           display_name: string
           id: string
           role: string
+          telegram_username: string | null
         }
         Insert: {
           created_at?: string
           display_name: string
           id: string
           role: string
+          telegram_username?: string | null
         }
         Update: {
           created_at?: string
           display_name?: string
           id?: string
           role?: string
+          telegram_username?: string | null
         }
         Relationships: []
       }
@@ -305,12 +308,176 @@ export type Database = {
           },
         ]
       }
+      telegram_assignment_notifications: {
+        Row: {
+          attempts: number
+          chat_id: number
+          created_at: string
+          error: string | null
+          id: string
+          profile_id: string
+          sent_at: string | null
+          status: string
+          task_id: string
+        }
+        Insert: {
+          attempts?: number
+          chat_id: number
+          created_at?: string
+          error?: string | null
+          id?: string
+          profile_id: string
+          sent_at?: string | null
+          status?: string
+          task_id: string
+        }
+        Update: {
+          attempts?: number
+          chat_id?: number
+          created_at?: string
+          error?: string | null
+          id?: string
+          profile_id?: string
+          sent_at?: string | null
+          status?: string
+          task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'telegram_assignment_notifications_profile_id_fkey'
+            columns: ['profile_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'telegram_assignment_notifications_task_id_fkey'
+            columns: ['task_id']
+            isOneToOne: false
+            referencedRelation: 'tasks'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      telegram_bot_state: {
+        Row: {
+          id: string
+          last_update_id: number
+          updated_at: string
+        }
+        Insert: {
+          id: string
+          last_update_id?: number
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          last_update_id?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      telegram_processed_updates: {
+        Row: {
+          chat_id: number
+          processed_at: string
+          update_id: number
+        }
+        Insert: {
+          chat_id: number
+          processed_at?: string
+          update_id: number
+        }
+        Update: {
+          chat_id?: number
+          processed_at?: string
+          update_id?: number
+        }
+        Relationships: []
+      }
+      telegram_profile_links: {
+        Row: {
+          chat_id: number
+          last_seen_at: string
+          linked_at: string
+          profile_id: string
+          telegram_username: string | null
+        }
+        Insert: {
+          chat_id: number
+          last_seen_at?: string
+          linked_at?: string
+          profile_id: string
+          telegram_username?: string | null
+        }
+        Update: {
+          chat_id?: number
+          last_seen_at?: string
+          linked_at?: string
+          profile_id?: string
+          telegram_username?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'telegram_profile_links_profile_id_fkey'
+            columns: ['profile_id']
+            isOneToOne: true
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      telegram_task_sessions: {
+        Row: {
+          chat_id: number
+          profile_id: string
+          selected_board_id: string | null
+          state: string
+          updated_at: string
+        }
+        Insert: {
+          chat_id: number
+          profile_id: string
+          selected_board_id?: string | null
+          state?: string
+          updated_at?: string
+        }
+        Update: {
+          chat_id?: number
+          profile_id?: string
+          selected_board_id?: string | null
+          state?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'telegram_task_sessions_profile_id_fkey'
+            columns: ['profile_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'telegram_task_sessions_selected_board_id_fkey'
+            columns: ['selected_board_id']
+            isOneToOne: false
+            referencedRelation: 'boards'
+            referencedColumns: ['id']
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_telegram_bot_secrets: {
+        Args: never
+        Returns: {
+          bot_token: string
+          poll_secret: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never

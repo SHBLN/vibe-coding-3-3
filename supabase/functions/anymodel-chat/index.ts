@@ -2,7 +2,8 @@ import { createClient } from 'npm:@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers':
+    'authorization, x-client-info, apikey, content-type, x-telegram-internal-secret',
 }
 
 const DEFAULT_BASE_URL = 'https://anymodel.org/v1'
@@ -50,6 +51,7 @@ type SplitGlobalTaskRequest = {
   title?: string
   description?: string
   dueAt?: string | null
+  profileId?: string
 }
 
 type AiSubtask = {
@@ -70,6 +72,16 @@ type CreatedSubtask = {
   assigneeName: string
   targetRole: string
   matchedRole: boolean
+}
+
+type SplitResult = {
+  epic: TaskRow
+  subtasks: CreatedSubtask[]
+  boardTasks: Array<Record<string, unknown>>
+  backlogColumnId: string
+  backlogStatus: string
+  unmatchedRoles: string[]
+  warnings: string[]
 }
 
 function jsonResponse(body: Record<string, unknown>, status = 200) {
@@ -292,68 +304,12 @@ async function rollbackCreatedTasks(
   await supabase.from('tasks').delete().in('id', taskIds)
 }
 
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
-
-  if (req.method !== 'POST') {
-    return jsonResponse({ error: 'Method not allowed' }, 405)
-  }
-
-  const supabaseUrl = Deno.env.get('SUPABASE_URL')
-  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')
-  const anymodelApiKey = Deno.env.get('ANYMODEL_API_KEY')
-  const baseUrl = (Deno.env.get('ANYMODEL_BASE_URL') ?? DEFAULT_BASE_URL).replace(/\/+$/, '')
-  const defaultModel = Deno.env.get('ANYMODEL_MODEL') ?? DEFAULT_MODEL
-
-  const missingKeys: string[] = []
-  if (!supabaseUrl) missingKeys.push('SUPABASE_URL')
-  if (!supabaseAnonKey) missingKeys.push('SUPABASE_ANON_KEY')
-  if (!anymodelApiKey) missingKeys.push('ANYMODEL_API_KEY')
-
-  if (missingKeys.length > 0) {
-    return jsonResponse({ error: 'Server is not configured', missingKeys }, 500)
-  }
-
-  const authHeader = req.headers.get('Authorization')
-  if (!authHeader) {
-    return jsonResponse({ error: 'Unauthorized' }, 401)
-  }
-
-  let payload: SplitGlobalTaskRequest
-  try {
-    payload = (await req.json()) as SplitGlobalTaskRequest
-  } catch {
-    return jsonResponse({ error: 'Invalid JSON body' }, 400)
-  }
-
-  const { boardId, columnId, status, title, description, dueAt } = payload
-  if (!boardId || !title?.trim()) {
-    return jsonResponse({ error: 'boardId and title are required' }, 400)
-  }
-
-  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    global: {
-      headers: {
-        Authorization: authHeader,
-      },
-    },
-  })
-
-  const { data: board, error: boardError } = await supabase
-    .from('boards')
-    .select('id')
-    .eq('id', boardId)
-    .maybeSingle()
-
-  if (boardError) {
-    return jsonResponse({ error: boardError.message }, 500)
-  }
-  if (!board) {
-    return jsonResponse({ error: 'Board not found or access denied' }, 403)
-  }
-
+async function resolveBacklogColumn(
+  supabase: ReturnType<typeof createClient>,
+  boardId: string,
+  columnId?: string,
+  status?: string,
+): Promise<{ columnId: string; status: string }> {
   let resolvedColumnId = columnId
   let resolvedStatus = status
 
@@ -365,12 +321,8 @@ Deno.serve(async (req) => {
       .eq('status_key', 'backlog')
       .maybeSingle()
 
-    if (backlogError) {
-      return jsonResponse({ error: backlogError.message }, 500)
-    }
-    if (!backlogColumn) {
-      return jsonResponse({ error: 'Backlog column not found on this board' }, 400)
-    }
+    if (backlogError) throw new Error(backlogError.message)
+    if (!backlogColumn) throw new Error('Backlog column not found on this board')
 
     resolvedColumnId = backlogColumn.id
     resolvedStatus = backlogColumn.status_key
@@ -383,28 +335,41 @@ Deno.serve(async (req) => {
     .eq('board_id', boardId)
     .maybeSingle()
 
-  if (columnError) {
-    return jsonResponse({ error: columnError.message }, 500)
-  }
-  if (!column) {
-    return jsonResponse({ error: 'Column not found on this board' }, 400)
+  if (columnError) throw new Error(columnError.message)
+  if (!column) throw new Error('Column not found on this board')
+
+  return { columnId: column.id, status: column.status_key }
+}
+
+async function splitGlobalTask(
+  supabase: ReturnType<typeof createClient>,
+  payload: SplitGlobalTaskRequest,
+  anymodelApiKey: string,
+  baseUrl: string,
+  defaultModel: string,
+): Promise<SplitResult> {
+  const { boardId, columnId, status, title, description, dueAt } = payload
+  if (!boardId || !title?.trim()) {
+    throw new Error('boardId and title are required')
   }
 
-  resolvedColumnId = column.id
-  resolvedStatus = column.status_key
+  const { columnId: resolvedColumnId, status: resolvedStatus } = await resolveBacklogColumn(
+    supabase,
+    boardId,
+    columnId,
+    status,
+  )
 
   const { data: profiles, error: profilesError } = await supabase
     .from('profiles')
     .select('id, display_name, role')
     .returns<ProfileRow[]>()
 
-  if (profilesError) {
-    return jsonResponse({ error: profilesError.message }, 500)
-  }
+  if (profilesError) throw new Error(profilesError.message)
 
   const eligibleProfiles = (profiles ?? []).filter((profile) => profile.role !== DEFAULT_UNSELECTED_ROLE)
   if (eligibleProfiles.length === 0) {
-    return jsonResponse({ error: 'No profiles with selected roles found' }, 422)
+    throw new Error('No profiles with selected roles found')
   }
 
   const { data: assigneeRows, error: workloadError } = await supabase
@@ -412,28 +377,20 @@ Deno.serve(async (req) => {
     .select('profile_id, tasks(status)')
     .returns<Array<{ profile_id: string; tasks: { status: string } | null }>>()
 
-  if (workloadError) {
-    return jsonResponse({ error: workloadError.message }, 500)
-  }
+  if (workloadError) throw new Error(workloadError.message)
 
   const workload = buildWorkloadMap(eligibleProfiles, assigneeRows ?? [])
   const warnings: string[] = []
   const unmatchedRoles: string[] = []
 
-  let aiSplit: AiSplitResponse
-  try {
-    const aiContent = await callAnyModel(
-      anymodelApiKey,
-      baseUrl,
-      defaultModel,
-      buildSystemPrompt(eligibleProfiles),
-      buildUserPrompt({ ...payload, title: title.trim() }),
-    )
-    aiSplit = parseAiSplitResponse(aiContent)
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to split task with AI'
-    return jsonResponse({ error: message }, 502)
-  }
+  const aiContent = await callAnyModel(
+    anymodelApiKey,
+    baseUrl,
+    defaultModel,
+    buildSystemPrompt(eligibleProfiles),
+    buildUserPrompt({ ...payload, title: title.trim() }),
+  )
+  const aiSplit = parseAiSplitResponse(aiContent)
 
   const createdTaskIds: string[] = []
   let epic: TaskRow | null = null
@@ -508,9 +465,7 @@ Deno.serve(async (req) => {
           profile_id: profile.id,
         })
 
-      if (assigneeError) {
-        throw new Error(assigneeError.message)
-      }
+      if (assigneeError) throw new Error(assigneeError.message)
 
       createdSubtasks.push({
         task: taskRow,
@@ -522,8 +477,7 @@ Deno.serve(async (req) => {
     }
   } catch (err) {
     await rollbackCreatedTasks(supabase, createdTaskIds)
-    const message = err instanceof Error ? err.message : 'Failed to persist split tasks'
-    return jsonResponse({ error: message, rolledBack: createdTaskIds.length > 0 }, 500)
+    throw err
   }
 
   const boardTasks = [
@@ -554,13 +508,121 @@ Deno.serve(async (req) => {
     })),
   ]
 
-  return jsonResponse({
-    epic,
+  return {
+    epic: epic!,
     subtasks: createdSubtasks,
     boardTasks,
     backlogColumnId: resolvedColumnId,
     backlogStatus: resolvedStatus,
     unmatchedRoles: [...new Set(unmatchedRoles)],
     warnings,
+  }
+}
+
+function isTelegramInternalRequest(req: Request): boolean {
+  const internalSecret = Deno.env.get('TELEGRAM_INTERNAL_SECRET')
+  if (!internalSecret) return false
+  return req.headers.get('x-telegram-internal-secret') === internalSecret
+}
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
+  }
+
+  if (req.method !== 'POST') {
+    return jsonResponse({ error: 'Method not allowed' }, 405)
+  }
+
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')
+  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')
+  const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+  const anymodelApiKey = Deno.env.get('ANYMODEL_API_KEY')
+  const baseUrl = (Deno.env.get('ANYMODEL_BASE_URL') ?? DEFAULT_BASE_URL).replace(/\/+$/, '')
+  const defaultModel = Deno.env.get('ANYMODEL_MODEL') ?? DEFAULT_MODEL
+
+  const missingKeys: string[] = []
+  if (!supabaseUrl) missingKeys.push('SUPABASE_URL')
+  if (!supabaseAnonKey) missingKeys.push('SUPABASE_ANON_KEY')
+  if (!anymodelApiKey) missingKeys.push('ANYMODEL_API_KEY')
+
+  if (missingKeys.length > 0) {
+    return jsonResponse({ error: 'Server is not configured', missingKeys }, 500)
+  }
+
+  let payload: SplitGlobalTaskRequest
+  try {
+    payload = (await req.json()) as SplitGlobalTaskRequest
+  } catch {
+    return jsonResponse({ error: 'Invalid JSON body' }, 400)
+  }
+
+  const { boardId, title, profileId } = payload
+  if (!boardId || !title?.trim()) {
+    return jsonResponse({ error: 'boardId and title are required' }, 400)
+  }
+
+  const telegramMode = isTelegramInternalRequest(req)
+
+  if (telegramMode) {
+    if (!supabaseServiceRoleKey) {
+      return jsonResponse({ error: 'Server is not configured', missingKeys: ['SUPABASE_SERVICE_ROLE_KEY'] }, 500)
+    }
+    if (!profileId) {
+      return jsonResponse({ error: 'profileId is required for Telegram mode' }, 400)
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseServiceRoleKey)
+
+    const { data: board, error: boardError } = await supabase
+      .from('boards')
+      .select('id, owner_id, title')
+      .eq('id', boardId)
+      .maybeSingle()
+
+    if (boardError) return jsonResponse({ error: boardError.message }, 500)
+    if (!board || board.owner_id !== profileId) {
+      return jsonResponse({ error: 'Board not found or access denied' }, 403)
+    }
+
+    try {
+      const result = await splitGlobalTask(supabase, payload, anymodelApiKey, baseUrl, defaultModel)
+      return jsonResponse({ ...result, boardTitle: board.title, source: 'telegram' })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to split task with AI'
+      const status = message.includes('No profiles with selected roles') ? 422 : message.includes('AnyModel') || message.includes('Model') ? 502 : 500
+      return jsonResponse({ error: message }, status)
+    }
+  }
+
+  const authHeader = req.headers.get('Authorization')
+  if (!authHeader) {
+    return jsonResponse({ error: 'Unauthorized' }, 401)
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    global: {
+      headers: {
+        Authorization: authHeader,
+      },
+    },
   })
+
+  const { data: board, error: boardError } = await supabase
+    .from('boards')
+    .select('id')
+    .eq('id', boardId)
+    .maybeSingle()
+
+  if (boardError) return jsonResponse({ error: boardError.message }, 500)
+  if (!board) return jsonResponse({ error: 'Board not found or access denied' }, 403)
+
+  try {
+    const result = await splitGlobalTask(supabase, payload, anymodelApiKey, baseUrl, defaultModel)
+    return jsonResponse({ ...result, source: 'web' })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to split task with AI'
+    const status = message.includes('No profiles with selected roles') ? 422 : message.includes('AnyModel') || message.includes('Model') ? 502 : 500
+    return jsonResponse({ error: message, rolledBack: message.includes('Failed to create') }, status)
+  }
 })
