@@ -5,3 +5,6 @@ verify_jwt = true
 
 [functions.anymodel-chat]
 verify_jwt = true
+
+[functions.telegram-ok-reply]
+verify_jwt = false

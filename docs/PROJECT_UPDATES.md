@@ -498,3 +498,16 @@ R2_SECRET_ACCESS_KEY=...
 - После завершения AI появляются новые карточки в backlog текущей доски.
 - Сообщение получает статус `success` и summary о количестве созданных задач.
 - При ошибке AI сообщение сохраняется со статусом `error` и текстом ошибки.
+
+## Telegram webhook-бот `telegram-ok-reply`
+
+Edge Function: `supabase/functions/telegram-ok-reply/index.ts`
+
+Поведение: Telegram шлёт update на webhook, функция отвечает `ок` на любое сообщение.
+
+Полная документация: [`docs/TELEGRAM_BOT.md`](TELEGRAM_BOT.md)
+
+Кратко:
+- секреты — Supabase Vault (`telegram_bot_token`, `telegram_poll_secret`) или env Edge Function;
+- деплой — `supabase functions deploy telegram-ok-reply`;
+- webhook — `setWebhook` на URL функции с тем же `secret_token`.
