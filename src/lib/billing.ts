@@ -28,6 +28,9 @@ async function getFunctionErrorMessage(error: unknown): Promise<string> {
   }
 
   if (error instanceof Error && error.message) {
+    if (error.message.includes('Failed to send a request to the Edge Function')) {
+      return 'Edge Function недоступна. Разверните stripe-cancel-subscription и stripe-upgrade-subscription в Supabase (см. docs/STRIPE_BILLING.md).'
+    }
     if (error.message.includes('non-2xx')) {
       return 'Edge Function вернула ошибку. Проверьте Stripe secrets в Supabase.'
     }
@@ -70,11 +73,63 @@ export async function fetchBillingPayments(): Promise<BillingPaymentRow[]> {
 export async function fetchCurrentSubscription(): Promise<BillingSubscriptionRow | null> {
   const { data, error } = await supabase
     .from('billing_subscriptions')
-    .select('user_id, stripe_subscription_id, plan_id, status, current_period_end, updated_at')
+    .select(
+      'user_id, stripe_subscription_id, plan_id, status, current_period_end, cancel_at_period_end, updated_at',
+    )
     .maybeSingle()
 
   if (error) throw error
   return data
+}
+
+export async function cancelSubscriptionAtPeriodEnd(): Promise<{
+  currentPeriodEnd: string | null
+  alreadyScheduled: boolean
+}> {
+  const { data, error } = await supabase.functions.invoke<{
+    ok?: boolean
+    currentPeriodEnd?: string | null
+    alreadyScheduled?: boolean
+    error?: string
+  }>('stripe-cancel-subscription', { body: {} })
+
+  if (error) {
+    throw new Error(await getFunctionErrorMessage(error))
+  }
+
+  if (!data?.ok) {
+    throw new Error(data?.error ?? 'Не удалось отменить подписку.')
+  }
+
+  return {
+    currentPeriodEnd: data.currentPeriodEnd ?? null,
+    alreadyScheduled: Boolean(data.alreadyScheduled),
+  }
+}
+
+export async function upgradeSubscription(planId: BillingPlanId): Promise<{
+  planId: BillingPlanId
+  currentPeriodEnd: string | null
+}> {
+  const { data, error } = await supabase.functions.invoke<{
+    ok?: boolean
+    planId?: BillingPlanId
+    currentPeriodEnd?: string | null
+    error?: string
+  }>('stripe-upgrade-subscription', { body: { planId } })
+
+  if (error) {
+    throw new Error(await getFunctionErrorMessage(error))
+  }
+
+  if (!data?.ok || !data.planId) {
+    throw new Error(data?.error ?? 'Не удалось повысить тариф.')
+  }
+
+  return {
+    planId: data.planId,
+    currentPeriodEnd: data.currentPeriodEnd ?? null,
+  }
 }
 
 export function formatPlanLabel(planId: string | null | undefined): string {

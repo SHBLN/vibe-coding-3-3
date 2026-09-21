@@ -1,6 +1,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import Stripe from 'npm:stripe@17.7.0'
-import { isPlanId, priceIdForPlan, type PlanId } from '../_shared/stripePlans.ts'
+import { isPlanId, priceIdForPlan, type PlanId } from './_shared/stripePlans.ts'
+import { checkoutBlockReason } from './_shared/subscriptionRules.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -94,6 +95,21 @@ Deno.serve(async (req) => {
   }
 
   const admin = createClient(supabaseUrl!, serviceRoleKey)
+
+  const { data: existingSubscription, error: existingSubError } = await admin
+    .from('billing_subscriptions')
+    .select('plan_id, status, current_period_end, cancel_at_period_end')
+    .eq('user_id', user.id)
+    .maybeSingle()
+
+  if (existingSubError) {
+    return jsonResponse({ error: existingSubError.message }, 500)
+  }
+
+  const checkoutDenied = checkoutBlockReason(existingSubscription, planId as PlanId)
+  if (checkoutDenied) {
+    return jsonResponse({ error: checkoutDenied, code: 'checkout_not_allowed' }, 400)
+  }
 
   const { data: profile, error: profileError } = await admin
     .from('profiles')

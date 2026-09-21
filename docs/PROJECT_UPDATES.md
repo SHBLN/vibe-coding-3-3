@@ -546,3 +546,17 @@ Edge Function: `supabase/functions/telegram-ok-reply/index.ts`
 - Ручное назначение карточки из доски отправляет одно уведомление подключенному исполнителю.
 - AI-назначения из `anymodel-chat` также попадают в очередь и отправляются.
 - Профиль без связи не получает уведомление.
+
+---
+
+## 2026-09-21 — Биллинг: лимиты тарифов, отмена и апгрейд
+
+### Лимиты по планам
+- Light: 1 проект, до 3 участников; Pro/Enterprise: лимиты участников и ИИ — см. `docs/BILLING_PLAN_LIMITS.md`.
+- Миграции: лимит досок, `board_members` + триггеры, `cancel_at_period_end` в `billing_subscriptions`.
+- UI: `/billing` (использование, тарифы), доска (участники, чат ИИ), `/boards` (создание проекта).
+
+### Подписка Stripe
+- Edge Functions: `stripe-cancel-subscription`, `stripe-upgrade-subscription`; обновлены checkout/webhook.
+- Повышение только Light → Pro → Enterprise; понижение после отмены и конца периода.
+- Документация: `docs/STRIPE_BILLING.md`, `docs/BILLING_PLAN_LIMITS.md`.

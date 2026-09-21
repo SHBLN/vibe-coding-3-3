@@ -17,10 +17,26 @@
 
 ```bash
 supabase functions deploy stripe-create-checkout
+supabase functions deploy stripe-cancel-subscription
+supabase functions deploy stripe-upgrade-subscription
 supabase functions deploy stripe-webhook
 ```
 
 Or deploy from the Supabase Dashboard / MCP.
+
+### Deploy bundles from repo (Windows / CI)
+
+Shared code lives under `supabase/functions/_shared/`. Function entrypoints import `./_shared/...`.
+
+```powershell
+node scripts/build-edge-deploy-files.mjs stripe-cancel-subscription
+# Upload `.edge-deploy-stripe-cancel-subscription.json` via Supabase MCP `deploy_edge_function`, or:
+node scripts/deploy-stripe-billing-functions.mjs   # requires authenticated Supabase MCP in `deploy-via-mcp.mjs`
+```
+
+Repeat for `stripe-upgrade-subscription`, `stripe-create-checkout`, `stripe-webhook`.
+
+Plan limits and upgrade/cancel rules: [BILLING_PLAN_LIMITS.md](./BILLING_PLAN_LIMITS.md).
 
 ## Stripe webhook
 
@@ -46,7 +62,9 @@ Use the CLI `whsec_...` as `STRIPE_WEBHOOK_SECRET` while listening.
 
 ## User flow
 
-1. User opens `/billing`, selects a plan, clicks **Оплатить**.
-2. `stripe-create-checkout` creates a Stripe Checkout Session (subscription).
-3. After payment, Stripe sends webhooks; data is stored in `billing_subscriptions` and `billing_payments`.
-4. User returns to `/billing?checkout=success` and sees updated history after webhook processing.
+1. User opens `/billing`, selects a plan, clicks **Оплатить** (only if there is no active subscription).
+2. `stripe-create-checkout` creates a Stripe Checkout Session (subscription). Blocked while an active subscription exists (use upgrade or cancel first).
+3. **Повышение тарифа** (Light → Pro → Enterprise only): `stripe-upgrade-subscription` updates the Stripe subscription price with proration.
+4. **Отмена**: `stripe-cancel-subscription` sets `cancel_at_period_end`; cheaper plans can be purchased only after the period ends (webhook `customer.subscription.deleted`).
+5. After payment, Stripe sends webhooks; data is stored in `billing_subscriptions` and `billing_payments`.
+6. User returns to `/billing?checkout=success` and sees updated history after webhook processing.

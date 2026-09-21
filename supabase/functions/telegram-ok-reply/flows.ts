@@ -25,6 +25,7 @@ import {
   touchTelegramProfileLink,
   upsertTelegramProfileLink,
 } from './botCore.ts'
+import { getAiSplitDenialReason } from '../_shared/planLimits.ts'
 import type {
   AiSplitResponse,
   ProfileRow,
@@ -209,6 +210,13 @@ async function handleAwaitTaskText(
   const locked = await markSessionProcessing(supabase, session)
   if (!locked) {
     return { action: 'create_task_already_processing' }
+  }
+
+  const aiDenial = await getAiSplitDenialReason(supabase, session.profile_id)
+  if (aiDenial) {
+    await clearTaskSession(supabase, chatId)
+    await sendTelegramMessage(botToken, chatId, aiDenial, MAIN_KEYBOARD)
+    return { action: 'create_task_plan_denied' }
   }
 
   await sendTelegramMessage(botToken, chatId, 'Обрабатываю задачу через AI...', MAIN_KEYBOARD)

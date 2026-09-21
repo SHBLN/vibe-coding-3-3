@@ -1,11 +1,17 @@
+import { Link } from 'react-router-dom'
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
+import type { BoardCreationBillingAction } from '../../lib/boards'
 import { getProfileInitials, getUniqueRoles, type AssigneeProfile } from '../../lib/profiles'
 
 type BoardMembersPickerProps = {
   profiles: AssigneeProfile[]
   profilesError: string | null
   selectedMemberIds: string[]
+  accountTeamMemberIds: string[]
+  teamMemberLimit: number | null
+  membersError: string | null
+  membersBillingAction: BoardCreationBillingAction | null
   onChange: (ids: string[]) => void
 }
 
@@ -42,10 +48,26 @@ function CheckIcon({ className = 'h-4 w-4' }: { className?: string }) {
   )
 }
 
+function canAddTeamMember(
+  profileId: string,
+  selectedMemberIds: string[],
+  accountTeamMemberIds: string[],
+  teamMemberLimit: number | null,
+): boolean {
+  if (selectedMemberIds.includes(profileId)) return true
+  if (teamMemberLimit === null) return true
+  if (accountTeamMemberIds.includes(profileId)) return true
+  return accountTeamMemberIds.length < teamMemberLimit
+}
+
 export function BoardMembersPicker({
   profiles,
   profilesError,
   selectedMemberIds,
+  accountTeamMemberIds,
+  teamMemberLimit,
+  membersError,
+  membersBillingAction,
   onChange,
 }: BoardMembersPickerProps) {
   const [isPopupOpen, setIsPopupOpen] = useState(false)
@@ -89,7 +111,15 @@ export function BoardMembersPicker({
   }, [isPopupOpen])
 
   const toggleMember = (profileId: string) => {
-    const nextIds = selectedMemberIds.includes(profileId)
+    const isSelected = selectedMemberIds.includes(profileId)
+    if (
+      !isSelected &&
+      !canAddTeamMember(profileId, selectedMemberIds, accountTeamMemberIds, teamMemberLimit)
+    ) {
+      return
+    }
+
+    const nextIds = isSelected
       ? selectedMemberIds.filter((id) => id !== profileId)
       : [...selectedMemberIds, profileId]
 
@@ -201,20 +231,46 @@ export function BoardMembersPicker({
           </p>
         ) : null}
 
+        {membersError ? (
+          <div className="border-b border-navy/10 px-3 py-2 text-xs text-red-600" role="alert">
+            <p>{membersError}</p>
+            {membersBillingAction ? (
+              <Link
+                to="/billing"
+                className="mt-1 inline-block font-semibold text-accent underline-offset-2 hover:underline"
+              >
+                {membersBillingAction === 'upgrade' ? 'Перейти к тарифам' : 'Оформить подписку'}
+              </Link>
+            ) : null}
+          </div>
+        ) : null}
+
         <div className="px-3 pt-2 text-[11px] text-navy/45">
-          Выбрано: <span className="font-semibold text-navy/60">{selectedMemberIds.length}</span> ·
-          Для добавления: <span className="font-semibold text-navy/60"> {availableMembers.length}</span>
+          На доске: <span className="font-semibold text-navy/60">{selectedMemberIds.length}</span> ·
+          В команде (все доски):{' '}
+          <span className="font-semibold text-navy/60">
+            {accountTeamMemberIds.length}
+            {teamMemberLimit !== null ? ` / ${teamMemberLimit}` : ''}
+          </span>
         </div>
 
         <ul className="max-h-64 overflow-y-auto p-2">
           {availableMembers.length > 0 ? (
             availableMembers.map((profile) => {
+              const addBlocked = !canAddTeamMember(
+                profile.id,
+                selectedMemberIds,
+                accountTeamMemberIds,
+                teamMemberLimit,
+              )
+
               return (
                 <li key={profile.id}>
                   <button
                     type="button"
                     onClick={() => toggleMember(profile.id)}
-                    className="press-down flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left hover:bg-surface-alt"
+                    disabled={addBlocked}
+                    className="press-down flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left hover:bg-surface-alt disabled:cursor-not-allowed disabled:opacity-45"
                   >
                     <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-navy text-[10px] font-bold text-white">
                       {getProfileInitials(profile.displayName)}

@@ -4,12 +4,20 @@ import { AccountBadge } from '../components/landing/AccountBadge'
 import { ButtonPrimary, LogoIcon } from '../components/landing/ui'
 import { useAuth } from '../hooks/useAuth'
 import {
+  fetchCurrentSubscription,
+  formatPlanLabel,
+  type BillingSubscriptionRow,
+} from '../lib/billing'
+import {
+  BoardLimitError,
   createBoard as createBoardInDb,
   deleteBoard as deleteBoardInDb,
   listBoards,
   updateBoard as updateBoardInDb,
   type Board,
+  type BoardCreationBillingAction,
 } from '../lib/boards'
+import { isActiveSubscription, maxBoardsForPlan } from '../lib/planLimits'
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('ru-RU', {
@@ -17,6 +25,35 @@ function formatDate(iso: string) {
     month: 'long',
     year: 'numeric',
   })
+}
+
+function getBoardCreationBlockReason(
+  subscription: BillingSubscriptionRow | null,
+  boardCount: number,
+): { message: string; billingAction: BoardCreationBillingAction } | null {
+  if (!subscription) {
+    return {
+      message: 'Для создания проекта нужна активная подписка.',
+      billingAction: 'subscribe',
+    }
+  }
+
+  if (!isActiveSubscription(subscription)) {
+    return {
+      message: 'Подписка неактивна. Обновите оплату в разделе «Биллинг».',
+      billingAction: 'subscribe',
+    }
+  }
+
+  const boardLimit = maxBoardsForPlan(subscription.plan_id)
+  if (boardLimit !== null && boardCount >= boardLimit) {
+    return {
+      message: `На тарифе ${formatPlanLabel(subscription.plan_id)} доступно проектов: ${boardLimit}.`,
+      billingAction: 'upgrade',
+    }
+  }
+
+  return null
 }
 
 function CloseIcon({ className = 'h-5 w-5' }: { className?: string }) {
@@ -104,12 +141,14 @@ function BoardFormModal({
   const [description, setDescription] = useState(initialDescription ?? '')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [billingAction, setBillingAction] = useState<BoardCreationBillingAction | null>(null)
 
   useEffect(() => {
     if (!isOpen) return
     setBoardTitle(initialTitle ?? '')
     setDescription(initialDescription ?? '')
     setError(null)
+    setBillingAction(null)
     setSubmitting(false)
   }, [isOpen, initialTitle, initialDescription])
 
@@ -133,6 +172,7 @@ function BoardFormModal({
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault()
     setError(null)
+    setBillingAction(null)
 
     const trimmedTitle = boardTitle.trim()
     if (!trimmedTitle) {
@@ -145,7 +185,13 @@ function BoardFormModal({
       await onSubmit({ title: trimmedTitle, description: description.trim() })
       onClose()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось сохранить доску.')
+      if (err instanceof BoardLimitError) {
+        setError(err.message)
+        setBillingAction(err.billingAction)
+      } else {
+        setError(err instanceof Error ? err.message : 'Не удалось сохранить доску.')
+        setBillingAction(null)
+      }
     } finally {
       setSubmitting(false)
     }
@@ -190,7 +236,15 @@ function BoardFormModal({
               className="rounded-2xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-700"
               role="alert"
             >
-              {error}
+              <p>{error}</p>
+              {billingAction ? (
+                <Link
+                  to="/billing"
+                  className="mt-2 inline-block text-sm font-semibold text-navy underline decoration-accent underline-offset-2 hover:text-accent"
+                >
+                  {billingAction === 'upgrade' ? 'Перейти к тарифам Pro / Enterprise' : 'Оформить подписку в биллинге'}
+                </Link>
+              ) : null}
             </div>
           ) : null}
 
@@ -343,13 +397,18 @@ export function BoardsPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [boardToDelete, setBoardToDelete] = useState<Board | null>(null)
+  const [subscription, setSubscription] = useState<BillingSubscriptionRow | null>(null)
 
   const loadBoards = useCallback(async () => {
     setBoardsError(null)
     setBoardsLoading(true)
 
     try {
-      const nextBoards = await listBoards()
+      const [nextBoards, currentSubscription] = await Promise.all([
+        listBoards(),
+        fetchCurrentSubscription(),
+      ])
+      setSubscription(currentSubscription)
       setBoards(nextBoards)
       setSelectedBoardId((current) => {
         if (current && nextBoards.some((board) => board.id === current)) {
@@ -424,6 +483,8 @@ export function BoardsPage() {
     0,
   )
 
+  const creationBlock = getBoardCreationBlockReason(subscription, boards.length)
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-surface to-surface-alt">
       <header className="sticky top-0 z-30 border-b border-navy/10 bg-surface/95 backdrop-blur">
@@ -483,6 +544,23 @@ export function BoardsPage() {
             role="alert"
           >
             {boardsError}
+          </div>
+        ) : null}
+
+        {creationBlock ? (
+          <div
+            className="mb-6 rounded-2xl border border-amber-400/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-950"
+            role="status"
+          >
+            <p>{creationBlock.message}</p>
+            <Link
+              to="/billing"
+              className="mt-2 inline-block font-semibold text-navy underline decoration-accent underline-offset-2 hover:text-accent"
+            >
+              {creationBlock.billingAction === 'upgrade'
+                ? 'Перейти к тарифам Pro / Enterprise'
+                : 'Оформить подписку в биллинге'}
+            </Link>
           </div>
         ) : null}
 

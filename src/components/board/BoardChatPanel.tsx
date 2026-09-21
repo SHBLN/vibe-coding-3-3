@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
+import type { BoardCreationBillingAction } from '../../lib/boards'
 import { getProfileInitials } from '../../lib/profiles'
 import type { BoardMessage } from '../../lib/boardChat'
 import { ButtonPrimary } from '../landing/ui'
@@ -10,6 +12,9 @@ type BoardChatPanelProps = {
   loading: boolean
   sending: boolean
   error: string | null
+  aiSplitEnabled: boolean
+  aiSplitBlockedMessage: string | null
+  aiSplitBillingAction: BoardCreationBillingAction | null
   onSendMessage: (body: string) => Promise<void>
 }
 
@@ -89,6 +94,9 @@ export function BoardChatPanel({
   loading,
   sending,
   error,
+  aiSplitEnabled,
+  aiSplitBlockedMessage,
+  aiSplitBillingAction,
   onSendMessage,
 }: BoardChatPanelProps) {
   const [draft, setDraft] = useState('')
@@ -104,7 +112,7 @@ export function BoardChatPanel({
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const trimmed = draft.trim()
-    if (!trimmed || sending) return
+    if (!trimmed || sending || !aiSplitEnabled) return
 
     setSubmitError(null)
 
@@ -121,9 +129,25 @@ export function BoardChatPanel({
       <div className="border-b border-navy/10 px-4 py-4">
         <h2 className="text-lg font-black tracking-[-0.03em] text-navy">Чат задач</h2>
         <p className="mt-1 text-xs text-navy/50">
-          Каждое сообщение создаёт эпик и подзадачи в backlog доски.
+          {aiSplitEnabled
+            ? 'Каждое сообщение создаёт эпик и подзадачи в backlog доски.'
+            : 'ИИ-разбиение недоступно на вашем тарифе — обновите план для постановки через чат.'}
         </p>
       </div>
+
+      {!aiSplitEnabled && aiSplitBlockedMessage ? (
+        <div className="border-b border-amber-400/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-900">
+          <p>{aiSplitBlockedMessage}</p>
+          {aiSplitBillingAction ? (
+            <Link
+              to="/billing?plan=pro"
+              className="mt-1 inline-block font-semibold text-accent underline-offset-2 hover:underline"
+            >
+              {aiSplitBillingAction === 'upgrade' ? 'Перейти на Pro' : 'Оформить подписку'}
+            </Link>
+          ) : null}
+        </div>
+      ) : null}
 
       <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto px-3 py-4">
         {loading ? (
@@ -159,13 +183,13 @@ export function BoardChatPanel({
           onChange={(event) => setDraft(event.target.value)}
           rows={3}
           placeholder="Опишите глобальную задачу…"
-          disabled={sending}
+          disabled={sending || !aiSplitEnabled}
           className="w-full resize-none rounded-xl border border-navy/10 bg-surface-alt/40 px-3 py-2 text-sm text-navy outline-none transition focus:border-accent/40 focus:ring-2 focus:ring-accent/15 disabled:opacity-60"
         />
 
         <div className="mt-3 flex items-center justify-between gap-3">
           <p className="text-[11px] text-navy/40">Enter не отправляет — используйте кнопку.</p>
-          <ButtonPrimary type="submit" disabled={sending || !draft.trim()}>
+          <ButtonPrimary type="submit" disabled={sending || !draft.trim() || !aiSplitEnabled}>
             {sending ? 'Обработка…' : 'Поставить задачу'}
           </ButtonPrimary>
         </div>

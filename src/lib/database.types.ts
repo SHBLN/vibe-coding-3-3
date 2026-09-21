@@ -63,6 +63,7 @@ export type Database = {
       }
       billing_subscriptions: {
         Row: {
+          cancel_at_period_end: boolean
           current_period_end: string | null
           plan_id: string
           status: string
@@ -71,6 +72,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          cancel_at_period_end?: boolean
           current_period_end?: string | null
           plan_id: string
           status: string
@@ -79,6 +81,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          cancel_at_period_end?: boolean
           current_period_end?: string | null
           plan_id?: string
           status?: string
@@ -178,6 +181,39 @@ export type Database = {
             columns: ['board_id']
             isOneToOne: false
             referencedRelation: 'boards'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      board_members: {
+        Row: {
+          board_id: string
+          created_at: string
+          profile_id: string
+        }
+        Insert: {
+          board_id: string
+          created_at?: string
+          profile_id: string
+        }
+        Update: {
+          board_id?: string
+          created_at?: string
+          profile_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'board_members_board_id_fkey'
+            columns: ['board_id']
+            isOneToOne: false
+            referencedRelation: 'boards'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'board_members_profile_id_fkey'
+            columns: ['profile_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
             referencedColumns: ['id']
           },
         ]

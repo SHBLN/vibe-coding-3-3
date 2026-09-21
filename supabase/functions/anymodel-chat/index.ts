@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
+import { getAiSplitDenialReason } from '../_shared/planLimits.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -585,6 +586,11 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: 'Board not found or access denied' }, 403)
     }
 
+    const aiDenial = await getAiSplitDenialReason(supabase, board.owner_id)
+    if (aiDenial) {
+      return jsonResponse({ error: aiDenial, code: 'ai_split_plan_required' }, 403)
+    }
+
     try {
       const result = await splitGlobalTask(supabase, payload, anymodelApiKey, baseUrl, defaultModel)
       return jsonResponse({ ...result, boardTitle: board.title, source: 'telegram' })
@@ -610,12 +616,22 @@ Deno.serve(async (req) => {
 
   const { data: board, error: boardError } = await supabase
     .from('boards')
-    .select('id')
+    .select('id, owner_id')
     .eq('id', boardId)
     .maybeSingle()
 
   if (boardError) return jsonResponse({ error: boardError.message }, 500)
   if (!board) return jsonResponse({ error: 'Board not found or access denied' }, 403)
+
+  if (!supabaseServiceRoleKey) {
+    return jsonResponse({ error: 'Server is not configured', missingKeys: ['SUPABASE_SERVICE_ROLE_KEY'] }, 500)
+  }
+
+  const adminSupabase = createClient(supabaseUrl, supabaseServiceRoleKey)
+  const aiDenial = await getAiSplitDenialReason(adminSupabase, board.owner_id)
+  if (aiDenial) {
+    return jsonResponse({ error: aiDenial, code: 'ai_split_plan_required' }, 403)
+  }
 
   try {
     const result = await splitGlobalTask(supabase, payload, anymodelApiKey, baseUrl, defaultModel)

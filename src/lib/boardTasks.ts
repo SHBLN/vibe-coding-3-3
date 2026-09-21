@@ -1,4 +1,5 @@
 import type { Json, Tables } from './database.types'
+import { fetchBoardMemberIds } from './boardMembers'
 import { getProfileInitials } from './profiles'
 import { supabase } from './supabase'
 import {
@@ -237,12 +238,14 @@ export async function fetchBoardView(boardId: string): Promise<BoardViewData | n
 
   const taskRows = await fetchTaskRows(boardId)
 
+  const memberIds = await fetchBoardMemberIds(boardId)
+
   return {
     id: boardRow.id,
     title: boardRow.title,
     description: boardRow.description,
     updatedAt: boardRow.updated_at,
-    memberIds: [],
+    memberIds,
     columns: buildColumns(columnRows, taskRows),
   }
 }

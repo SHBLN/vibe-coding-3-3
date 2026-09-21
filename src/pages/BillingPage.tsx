@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { AccountBadge } from '../components/landing/AccountBadge'
 import { ButtonPrimary, CheckIcon, LogoIcon } from '../components/landing/ui'
 import {
+  cancelSubscriptionAtPeriodEnd,
   fetchBillingPayments,
   fetchCurrentSubscription,
   formatMoney,
@@ -10,11 +11,25 @@ import {
   paymentStatusLabel,
   startCheckout,
   subscriptionStatusLabel,
+  upgradeSubscription,
   type BillingPaymentRow,
   type BillingPlanId,
   type BillingSubscriptionRow,
 } from '../lib/billing'
 import { useAuth } from '../hooks/useAuth'
+import { fetchOwnerDistinctTeamMemberIds } from '../lib/boardMembers'
+import { listBoards } from '../lib/boards'
+import {
+  boardsLimitLabel,
+  canUseAiSplit,
+  planIncludesAiSplit,
+  teamMemberLimitLabel,
+} from '../lib/planLimits'
+import {
+  canCancelSubscription,
+  isSubscriptionEntitled,
+  resolvePlanAction,
+} from '../lib/subscriptionRules'
 
 const PLANS: {
   id: BillingPlanId
@@ -57,6 +72,8 @@ const PLANS: {
     description: 'Для крупных организаций',
     features: [
       'Безлимит участников',
+      'Безлимит проектов',
+      'ИИ-разбиение задач',
       'SSO и RBAC',
       'Выделенный менеджер',
       'SLA 99.9%',
@@ -102,6 +119,140 @@ function parsePlanIdFromQuery(value: string | null): BillingPlanId | null {
   return null
 }
 
+type NoticeTone = 'success' | 'warning' | 'error'
+
+function BillingNotice({
+  tone,
+  children,
+  onDismiss,
+}: {
+  tone: NoticeTone
+  children: string
+  onDismiss?: () => void
+}) {
+  const toneClass =
+    tone === 'success'
+      ? 'border-emerald-400/35 bg-emerald-500/10 text-emerald-900'
+      : tone === 'warning'
+        ? 'border-amber-400/35 bg-amber-500/10 text-amber-950'
+        : 'border-red-400/35 bg-red-500/10 text-red-800'
+
+  return (
+    <div
+      className={`mb-6 flex items-start justify-between gap-3 rounded-2xl border px-4 py-3 text-sm ${toneClass}`}
+      role={tone === 'error' ? 'alert' : 'status'}
+    >
+      <p className="leading-relaxed">{children}</p>
+      {onDismiss ? (
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold opacity-70 transition hover:bg-white/40 hover:opacity-100"
+        >
+          Закрыть
+        </button>
+      ) : null}
+    </div>
+  )
+}
+
+function planCardBadge(
+  planAction: ReturnType<typeof resolvePlanAction>,
+  popular: boolean,
+): { label: string; className: string } | null {
+  if (planAction.action === 'current') {
+    return {
+      label: 'Ваш тариф',
+      className: 'border-emerald-400/40 bg-emerald-500/15 text-emerald-200',
+    }
+  }
+  if (planAction.action === 'upgrade') {
+    return {
+      label: 'Повышение',
+      className: 'border-accent/50 bg-accent/15 text-accent',
+    }
+  }
+  if (planAction.action === 'blocked') {
+    return {
+      label: 'Позже',
+      className: 'border-white/15 bg-white/5 text-white/45',
+    }
+  }
+  if (popular) {
+    return {
+      label: 'Популярный',
+      className: 'border-accent/50 bg-accent/10 text-accent',
+    }
+  }
+  return null
+}
+
+function CancelSubscriptionModal({
+  open,
+  busy,
+  periodEndLabel,
+  onClose,
+  onConfirm,
+}: {
+  open: boolean
+  busy: boolean
+  periodEndLabel: string | null
+  onClose: () => void
+  onConfirm: () => void
+}) {
+  if (!open) return null
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (!busy && event.target === event.currentTarget) onClose()
+      }}
+    >
+      <div className="absolute inset-0 bg-navy/50 backdrop-blur-sm" aria-hidden />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="cancel-subscription-title"
+        className="relative z-10 w-full max-w-md rounded-2xl border border-navy/10 bg-white p-6 shadow-hero"
+      >
+        <h2 id="cancel-subscription-title" className="text-lg font-black text-navy">
+          Отменить автопродление?
+        </h2>
+        <p className="mt-2 text-sm leading-relaxed text-navy/65">
+          Доступ к функциям тарифа сохранится до конца оплаченного периода. После этой даты можно
+          оформить любой план, в том числе более дешёвый.
+        </p>
+        {periodEndLabel ? (
+          <p className="mt-3 rounded-xl bg-surface-alt/80 px-3 py-2 text-xs text-navy/55">
+            Оплаченный период до:{' '}
+            <span className="font-semibold text-navy">{periodEndLabel}</span>
+          </p>
+        ) : null}
+        <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onClose}
+            className="press-down rounded-xl border border-navy/15 bg-white px-4 py-2.5 text-sm font-bold text-navy/70 transition hover:border-navy/25 disabled:opacity-50"
+          >
+            Оставить подписку
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onConfirm}
+            className="press-down rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-700 transition hover:bg-red-100 disabled:opacity-50"
+          >
+            {busy ? 'Отмена…' : 'Отменить автопродление'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function BillingPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -116,19 +267,29 @@ export function BillingPage() {
   const [paying, setPaying] = useState(false)
   const [payError, setPayError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [boardCount, setBoardCount] = useState(0)
+  const [teamMemberCount, setTeamMemberCount] = useState(0)
+  const [canceling, setCanceling] = useState(false)
+  const [cancelMessage, setCancelMessage] = useState<string | null>(null)
+  const [cancelModalOpen, setCancelModalOpen] = useState(false)
 
   const selectedPlan = PLANS.find((p) => p.id === selectedPlanId) ?? PLANS[1]
+  const selectedPlanAction = resolvePlanAction(subscription, selectedPlanId)
 
   const loadBilling = useCallback(async () => {
     setBillingLoading(true)
     setBillingError(null)
     try {
-      const [payments, currentSubscription] = await Promise.all([
+      const [payments, currentSubscription, boards, teamIds] = await Promise.all([
         fetchBillingPayments(),
         fetchCurrentSubscription(),
+        listBoards(),
+        fetchOwnerDistinctTeamMemberIds(),
       ])
       setPaymentHistory(payments)
       setSubscription(currentSubscription)
+      setBoardCount(boards.length)
+      setTeamMemberCount(teamIds.length)
     } catch (err) {
       setBillingError(err instanceof Error ? err.message : 'Не удалось загрузить биллинг.')
     } finally {
@@ -169,17 +330,74 @@ export function BillingPage() {
     navigate('/')
   }
 
-  const handlePay = async () => {
+  const handlePrimaryPlanAction = async () => {
     setSuccess(null)
     setPayError(null)
+    setCancelMessage(null)
+
+    if (selectedPlanAction.action === 'current' || selectedPlanAction.action === 'blocked') {
+      return
+    }
+
     setPaying(true)
     try {
-      await startCheckout(selectedPlanId)
+      if (selectedPlanAction.action === 'upgrade') {
+        const result = await upgradeSubscription(selectedPlanId)
+        setSuccess(
+          `Тариф повышен до ${formatPlanLabel(result.planId)}. Изменения применены, доплата списана по правилам Stripe.`,
+        )
+        await loadBilling()
+      } else {
+        await startCheckout(selectedPlanId)
+      }
     } catch (err) {
-      setPayError(err instanceof Error ? err.message : 'Не удалось начать оплату.')
+      setPayError(err instanceof Error ? err.message : 'Не удалось выполнить действие.')
+    } finally {
       setPaying(false)
     }
   }
+
+  const handleConfirmCancelSubscription = async () => {
+    setPayError(null)
+    setSuccess(null)
+    setCancelMessage(null)
+
+    if (!canCancelSubscription(subscription) || subscription?.cancel_at_period_end) return
+
+    setCanceling(true)
+    try {
+      const result = await cancelSubscriptionAtPeriodEnd()
+      setCancelMessage(
+        result.alreadyScheduled
+          ? 'Отмена уже была запланирована ранее.'
+          : result.currentPeriodEnd
+            ? `Автопродление отключено. Доступ сохранится до ${formatDateTime(result.currentPeriodEnd)}.`
+            : 'Автопродление будет отключено в конце оплаченного периода.',
+      )
+      setCancelModalOpen(false)
+      await loadBilling()
+    } catch (err) {
+      setPayError(err instanceof Error ? err.message : 'Не удалось отменить подписку.')
+    } finally {
+      setCanceling(false)
+    }
+  }
+
+  const primaryButtonLabel = (() => {
+    if (paying) {
+      return selectedPlanAction.action === 'upgrade' ? 'Повышение…' : 'Переход в Stripe…'
+    }
+    switch (selectedPlanAction.action) {
+      case 'upgrade':
+        return `Повысить до ${selectedPlan.name}`
+      case 'current':
+        return 'Текущий тариф'
+      case 'blocked':
+        return 'Недоступно'
+      default:
+        return 'Оплатить'
+    }
+  })()
 
   if (loading || !account) {
     return (
@@ -223,49 +441,115 @@ export function BillingPage() {
           </p>
         </div>
 
+        {cancelMessage ? (
+          <BillingNotice tone="warning" onDismiss={() => setCancelMessage(null)}>
+            {cancelMessage}
+          </BillingNotice>
+        ) : null}
+
         {success ? (
-          <div
-            className="mb-6 rounded-2xl border border-emerald-400/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-800"
-            role="status"
-          >
+          <BillingNotice tone="success" onDismiss={() => setSuccess(null)}>
             {success}
-          </div>
+          </BillingNotice>
         ) : null}
 
         {payError ? (
-          <div
-            className="mb-6 rounded-2xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-700"
-            role="alert"
-          >
+          <BillingNotice tone="error" onDismiss={() => setPayError(null)}>
             {payError}
-          </div>
+          </BillingNotice>
         ) : null}
 
         {billingError ? (
-          <div
-            className="mb-6 rounded-2xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-700"
-            role="alert"
-          >
+          <BillingNotice tone="error" onDismiss={() => setBillingError(null)}>
             {billingError}
-          </div>
+          </BillingNotice>
         ) : null}
 
         {subscription ? (
-          <section className="panel-shell mb-8 p-6">
-            <p className="text-xs font-black uppercase tracking-[0.2em] text-accent">Текущая подписка</p>
-            <div className="mt-3 flex flex-wrap items-center gap-3">
-              <p className="text-lg font-black text-navy">{formatPlanLabel(subscription.plan_id)}</p>
-              <span
-                className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${statusBadgeClass(subscription.status)}`}
-              >
-                {subscriptionStatusLabel(subscription.status)}
-              </span>
-              {subscription.current_period_end ? (
-                <p className="text-sm text-navy/55">
-                  Действует до {formatDateTime(subscription.current_period_end)}
-                </p>
-              ) : null}
+          <section className="panel-shell mb-8 overflow-hidden">
+            <div className="border-b border-navy/10 bg-gradient-to-r from-navy to-navy-light px-6 py-5 text-white">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/45">
+                Текущая подписка
+              </p>
+              <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
+                <div>
+                  <p className="text-2xl font-black tracking-tight">
+                    {formatPlanLabel(subscription.plan_id)}
+                  </p>
+                  {subscription.current_period_end ? (
+                    <p className="mt-1 text-sm text-white/55">
+                      Период до {formatDateTime(subscription.current_period_end)}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <span
+                    className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${statusBadgeClass(subscription.status)}`}
+                  >
+                    {subscriptionStatusLabel(subscription.status)}
+                  </span>
+                  {subscription.cancel_at_period_end && isSubscriptionEntitled(subscription) ? (
+                    <span className="inline-flex rounded-full border border-amber-300/40 bg-amber-400/15 px-3 py-1 text-xs font-semibold text-amber-100">
+                      Без автопродления
+                    </span>
+                  ) : null}
+                </div>
+              </div>
             </div>
+
+            <div className="grid gap-3 p-6 sm:grid-cols-3">
+              <div className="rounded-xl border border-navy/10 bg-surface-alt/40 px-4 py-3">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-navy/40">Проекты</p>
+                <p className="mt-1 text-lg font-black text-navy">
+                  {boardCount}
+                  <span className="text-sm font-semibold text-navy/45">
+                    {' '}
+                    / {boardsLimitLabel(subscription.plan_id)}
+                  </span>
+                </p>
+              </div>
+              <div className="rounded-xl border border-navy/10 bg-surface-alt/40 px-4 py-3">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-navy/40">Команда</p>
+                <p className="mt-1 text-lg font-black text-navy">
+                  {teamMemberCount}
+                  <span className="text-sm font-semibold text-navy/45">
+                    {teamMemberLimitLabel(subscription.plan_id)
+                      ? ` / ${teamMemberLimitLabel(subscription.plan_id)}`
+                      : ' · ∞'}
+                  </span>
+                </p>
+              </div>
+              <div className="rounded-xl border border-navy/10 bg-surface-alt/40 px-4 py-3">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-navy/40">ИИ</p>
+                <p className="mt-1 text-sm font-bold leading-snug text-navy">
+                  {canUseAiSplit(subscription)
+                    ? 'Доступно'
+                    : planIncludesAiSplit(subscription.plan_id)
+                      ? 'Нужна активная оплата'
+                      : 'Только Pro+'}
+                </p>
+              </div>
+            </div>
+
+            {canCancelSubscription(subscription) ? (
+              <div className="flex flex-col gap-2 border-t border-navy/10 bg-surface/50 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs text-navy/50">
+                  {subscription.cancel_at_period_end
+                    ? 'Автопродление уже отключено — тариф действует до конца периода.'
+                    : 'Понижение тарифа — после окончания текущего периода.'}
+                </p>
+                {!subscription.cancel_at_period_end ? (
+                  <button
+                    type="button"
+                    disabled={canceling}
+                    onClick={() => setCancelModalOpen(true)}
+                    className="press-down shrink-0 text-sm font-semibold text-navy/55 underline-offset-2 transition hover:text-red-600 hover:underline disabled:opacity-50"
+                  >
+                    Отменить автопродление
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
           </section>
         ) : null}
 
@@ -276,6 +560,10 @@ export function BillingPage() {
           <div className="grid gap-5 md:grid-cols-3">
             {PLANS.map((plan) => {
               const isSelected = plan.id === selectedPlanId
+              const planAction = resolvePlanAction(subscription, plan.id)
+              const isCurrent = planAction.action === 'current'
+              const isBlocked = planAction.action === 'blocked'
+              const badge = planCardBadge(planAction, plan.popular)
               return (
                 <button
                   key={plan.id}
@@ -285,18 +573,28 @@ export function BillingPage() {
                     setSuccess(null)
                     setPayError(null)
                   }}
-                  className={`relative flex min-h-[380px] flex-col rounded-2xl border p-8 text-left shadow-card transition duration-300 hover:-translate-y-1 ${
+                  className={`relative flex min-h-[380px] flex-col rounded-2xl border p-8 text-left shadow-card transition duration-300 ${
+                    isBlocked
+                      ? 'cursor-default border-navy/10 bg-navy/90 opacity-90'
+                      : 'hover:-translate-y-1'
+                  } ${
                     isSelected
-                      ? 'border-accent/60 bg-navy-light ring-2 ring-accent/50'
-                      : 'border-navy/10 bg-navy hover:border-navy/20'
+                      ? isCurrent
+                        ? 'border-emerald-400/50 bg-navy-light ring-2 ring-emerald-400/40'
+                        : 'border-accent/60 bg-navy-light ring-2 ring-accent/50'
+                      : isBlocked
+                        ? ''
+                        : 'border-navy/10 bg-navy hover:border-navy/20'
                   }`}
                 >
-                  {plan.popular ? (
-                    <span className="absolute right-6 top-6 text-[10px] font-bold uppercase tracking-wider text-accent">
-                      Самый популярный
+                  {badge ? (
+                    <span
+                      className={`absolute right-6 top-6 inline-flex rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${badge.className}`}
+                    >
+                      {badge.label}
                     </span>
                   ) : null}
-                  <p className="mb-4 text-xs font-semibold uppercase tracking-[0.15em] text-white/40">
+                  <p className="mb-4 pr-24 text-xs font-semibold uppercase tracking-[0.15em] text-white/40">
                     {plan.name}
                   </p>
                   <p className="mb-2 text-4xl font-black tracking-tight text-white">
@@ -314,7 +612,7 @@ export function BillingPage() {
                       </li>
                     ))}
                   </ul>
-                  {isSelected ? (
+                  {isSelected && !isCurrent ? (
                     <p className="mt-6 text-center text-xs font-bold uppercase tracking-wider text-accent">
                       Выбран
                     </p>
@@ -324,23 +622,56 @@ export function BillingPage() {
             })}
           </div>
 
-          <div className="panel-shell mt-6 flex flex-col items-stretch gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm font-semibold text-navy">К оплате</p>
-              <p className="text-2xl font-black text-navy">
-                {selectedPlan.price}
-                <span className="text-base font-medium text-navy/45">{selectedPlan.period}</span>
-                <span className="ml-2 text-sm font-semibold text-navy/50">· {selectedPlan.name}</span>
-              </p>
+          <div className="panel-shell mt-6 p-6">
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <p className="text-xs font-black uppercase tracking-[0.15em] text-navy/40">
+                  {selectedPlanAction.action === 'upgrade'
+                    ? 'Повышение'
+                    : selectedPlanAction.action === 'current'
+                      ? 'Ваш план'
+                      : selectedPlanAction.action === 'blocked'
+                        ? 'Недоступно'
+                        : 'Оплата'}
+                </p>
+                <p className="mt-1 text-2xl font-black text-navy">
+                  {selectedPlan.price}
+                  <span className="text-base font-medium text-navy/45">{selectedPlan.period}</span>
+                  <span className="ml-2 text-sm font-semibold text-navy/50">· {selectedPlan.name}</span>
+                </p>
+              </div>
+              <ButtonPrimary
+                type="button"
+                disabled={
+                  paying ||
+                  selectedPlanAction.action === 'current' ||
+                  selectedPlanAction.action === 'blocked'
+                }
+                onClick={() => void handlePrimaryPlanAction()}
+                className="w-full justify-center px-8 py-3 sm:w-auto sm:min-w-[220px]"
+              >
+                {primaryButtonLabel}
+              </ButtonPrimary>
             </div>
-            <ButtonPrimary
-              type="button"
-              disabled={paying}
-              onClick={() => void handlePay()}
-              className="justify-center px-8 py-3 sm:min-w-[200px]"
-            >
-              {paying ? 'Переход в Stripe…' : 'Оплатить'}
-            </ButtonPrimary>
+
+            {selectedPlanAction.action === 'upgrade' ? (
+              <p className="mt-4 rounded-xl border border-accent/15 bg-accent/5 px-3 py-2 text-xs leading-relaxed text-navy/60">
+                Доплата за оставшийся период рассчитывается Stripe автоматически (proration).
+              </p>
+            ) : null}
+
+            {selectedPlanAction.action === 'blocked' && selectedPlanAction.message ? (
+              <p className="mt-4 rounded-xl border border-navy/10 bg-surface-alt/60 px-3 py-2 text-xs leading-relaxed text-navy/55">
+                {selectedPlanAction.message}
+              </p>
+            ) : null}
+
+            {selectedPlanAction.action === 'current' ? (
+              <p className="mt-4 text-xs text-navy/45">
+                Чтобы перейти на более дешёвый тариф, сначала отключите автопродление и дождитесь
+                окончания периода.
+              </p>
+            ) : null}
           </div>
         </section>
 
@@ -387,6 +718,20 @@ export function BillingPage() {
           </div>
         </section>
       </main>
+
+      <CancelSubscriptionModal
+        open={cancelModalOpen}
+        busy={canceling}
+        periodEndLabel={
+          subscription?.current_period_end
+            ? formatDateTime(subscription.current_period_end)
+            : null
+        }
+        onClose={() => {
+          if (!canceling) setCancelModalOpen(false)
+        }}
+        onConfirm={() => void handleConfirmCancelSubscription()}
+      />
     </div>
   )
 }

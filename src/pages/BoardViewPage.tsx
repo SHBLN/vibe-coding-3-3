@@ -41,6 +41,18 @@ import {
   updateBoardColumn,
   updateTask,
 } from '../lib/boardTasks'
+import { fetchCurrentSubscription, type BillingSubscriptionRow } from '../lib/billing'
+import { BoardLimitError, type BoardCreationBillingAction } from '../lib/boards'
+import {
+  fetchOwnerDistinctTeamMemberIds,
+  saveBoardMembers,
+} from '../lib/boardMembers'
+import {
+  aiSplitUnavailableMessage,
+  canUseAiSplit,
+  isActiveSubscription,
+  maxTeamMembersForPlan,
+} from '../lib/planLimits'
 import { getProfileInitials, listProfiles, type AssigneeProfile } from '../lib/profiles'
 import {
   DONE_STATUS_KEY,
@@ -706,6 +718,11 @@ type BoardViewContentProps = {
   profiles: AssigneeProfile[]
   profilesError: string | null
   boardMemberIds: string[]
+  accountTeamMemberIds: string[]
+  teamMemberLimit: number | null
+  membersError: string | null
+  membersBillingAction: BoardCreationBillingAction | null
+  membersSaving: boolean
   dragState: DragState
   columnDragState: ColumnDragState
   savingTaskId: string | null
@@ -744,6 +761,11 @@ function BoardViewContent({
   profiles,
   profilesError,
   boardMemberIds,
+  accountTeamMemberIds,
+  teamMemberLimit,
+  membersError,
+  membersBillingAction,
+  membersSaving,
   dragState,
   columnDragState,
   savingTaskId,
@@ -824,8 +846,15 @@ function BoardViewContent({
               profiles={profiles}
               profilesError={profilesError}
               selectedMemberIds={boardMemberIds}
+              accountTeamMemberIds={accountTeamMemberIds}
+              teamMemberLimit={teamMemberLimit}
+              membersError={membersError}
+              membersBillingAction={membersBillingAction}
               onChange={onBoardMembersChange}
             />
+            {membersSaving ? (
+              <span className="text-[11px] font-medium text-navy/45">Сохранение доступа…</span>
+            ) : null}
           </div>
         </div>
       </div>
@@ -923,6 +952,12 @@ export function BoardViewPage() {
   const [board, setBoard] = useState<BoardViewData | null>(null)
   const [columns, setColumns] = useState<BoardViewColumn[]>([])
   const [boardMemberIds, setBoardMemberIds] = useState<string[]>([])
+  const [accountTeamMemberIds, setAccountTeamMemberIds] = useState<string[]>([])
+  const [subscription, setSubscription] = useState<BillingSubscriptionRow | null>(null)
+  const [membersError, setMembersError] = useState<string | null>(null)
+  const [membersBillingAction, setMembersBillingAction] =
+    useState<BoardCreationBillingAction | null>(null)
+  const [membersSaving, setMembersSaving] = useState(false)
   const [boardLoading, setBoardLoading] = useState(true)
   const [boardError, setBoardError] = useState<string | null>(null)
   const [profiles, setProfiles] = useState<AssigneeProfile[]>([])
@@ -950,6 +985,15 @@ export function BoardViewPage() {
   const processingMessageIdsRef = useRef<Set<string>>(new Set())
 
   columnsRef.current = columns
+
+  const teamMemberLimit = maxTeamMembersForPlan(subscription?.plan_id)
+  const aiSplitEnabled = canUseAiSplit(subscription)
+  const aiSplitBlockedMessage = aiSplitEnabled ? null : aiSplitUnavailableMessage(subscription)
+  const aiSplitBillingAction: BoardCreationBillingAction | null = aiSplitEnabled
+    ? null
+    : !subscription || !isActiveSubscription(subscription)
+      ? 'subscribe'
+      : 'upgrade'
 
   const crudLocked =
     crudBusy ||
@@ -1037,6 +1081,14 @@ export function BoardViewPage() {
         setBoard(nextBoard)
         setColumns(nextBoard.columns)
         setBoardMemberIds(nextBoard.memberIds)
+
+        const [sub, teamIds] = await Promise.all([
+          fetchCurrentSubscription(),
+          fetchOwnerDistinctTeamMemberIds(),
+        ])
+        if (cancelled) return
+        setSubscription(sub)
+        setAccountTeamMemberIds(teamIds)
       } catch (err) {
         if (!cancelled) {
           setBoard(null)
@@ -1152,6 +1204,12 @@ export function BoardViewPage() {
     async (body: string) => {
       if (!boardId) return
 
+      if (!canUseAiSplit(subscription)) {
+        const message = aiSplitUnavailableMessage(subscription)
+        setChatError(message)
+        throw new Error(message)
+      }
+
       setChatSending(true)
       setChatError(null)
 
@@ -1214,12 +1272,56 @@ export function BoardViewPage() {
         setChatSending(false)
       }
     },
-    [appendTasksToBacklog, boardId],
+    [appendTasksToBacklog, boardId, subscription],
   )
 
   const handleOpenCreateTask = useCallback((columnId: string) => {
     setTaskForm({ mode: 'create', columnId })
   }, [])
+
+  const handleBoardMembersChange = useCallback(
+    async (ids: string[]) => {
+      if (!board) return
+
+      const prev = boardMemberIds
+      const added = ids.filter((id) => !prev.includes(id))
+
+      for (const profileId of added) {
+        if (accountTeamMemberIds.includes(profileId)) continue
+        const max = maxTeamMembersForPlan(subscription?.plan_id)
+        if (max !== null && accountTeamMemberIds.length >= max) {
+          setMembersError(`На вашем тарифе доступно до ${max} участников во всех проектах.`)
+          setMembersBillingAction('upgrade')
+          return
+        }
+      }
+
+      setMembersError(null)
+      setMembersBillingAction(null)
+      setBoardMemberIds(ids)
+      setMembersSaving(true)
+
+      try {
+        await saveBoardMembers(board.id, ids)
+        const teamIds = await fetchOwnerDistinctTeamMemberIds()
+        setAccountTeamMemberIds(teamIds)
+      } catch (err) {
+        setBoardMemberIds(prev)
+        if (err instanceof BoardLimitError) {
+          setMembersError(err.message)
+          setMembersBillingAction(err.billingAction)
+        } else {
+          setMembersError(
+            err instanceof Error ? err.message : 'Не удалось обновить участников доски.',
+          )
+          setMembersBillingAction(null)
+        }
+      } finally {
+        setMembersSaving(false)
+      }
+    },
+    [board, boardMemberIds, accountTeamMemberIds, subscription?.plan_id],
+  )
 
   const handleOpenCreateColumn = useCallback(() => {
     setColumnForm({ mode: 'create' })
@@ -1809,6 +1911,11 @@ export function BoardViewPage() {
                 profiles={profiles}
                 profilesError={profilesError}
                 boardMemberIds={boardMemberIds}
+                accountTeamMemberIds={accountTeamMemberIds}
+                teamMemberLimit={teamMemberLimit}
+                membersError={membersError}
+                membersBillingAction={membersBillingAction}
+                membersSaving={membersSaving}
                 dragState={dragState}
                 columnDragState={columnDragState}
                 savingTaskId={savingTaskId}
@@ -1821,7 +1928,7 @@ export function BoardViewPage() {
                 onSelectAllTasks={handleSelectAllTasks}
                 onClearSelection={handleClearSelection}
                 onBulkDelete={handleOpenBulkDelete}
-                onBoardMembersChange={setBoardMemberIds}
+                onBoardMembersChange={handleBoardMembersChange}
                 onCreateColumn={handleOpenCreateColumn}
                 onCreateTask={handleOpenCreateTask}
                 onEditColumn={handleOpenEditColumn}
@@ -1849,6 +1956,9 @@ export function BoardViewPage() {
               loading={chatLoading}
               sending={chatSending}
               error={chatError}
+              aiSplitEnabled={aiSplitEnabled}
+              aiSplitBlockedMessage={aiSplitBlockedMessage}
+              aiSplitBillingAction={aiSplitBillingAction}
               onSendMessage={handleChatSubmit}
             />
           </div>

@@ -4,7 +4,7 @@ import {
   planIdForPriceId,
   resolvePlanIdFromMetadata,
   type PlanId,
-} from '../_shared/stripePlans.ts'
+} from './_shared/stripePlans.ts'
 
 function jsonResponse(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -73,6 +73,7 @@ async function upsertSubscription(
       plan_id: payload.planId,
       status: payload.subscription.status,
       current_period_end: subscriptionPeriodEnd(payload.subscription),
+      cancel_at_period_end: payload.subscription.cancel_at_period_end ?? false,
       updated_at: new Date().toISOString(),
     },
     { onConflict: 'user_id' },
@@ -180,6 +181,7 @@ async function handleSubscriptionDeleted(admin: SupabaseClient, subscription: St
     .from('billing_subscriptions')
     .update({
       status: 'canceled',
+      cancel_at_period_end: false,
       updated_at: new Date().toISOString(),
     })
     .eq('stripe_subscription_id', subscription.id)

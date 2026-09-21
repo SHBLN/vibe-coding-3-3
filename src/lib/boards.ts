@@ -51,6 +51,45 @@ function mapBoardRow(row: BoardRow, columns: BoardColumnRow[]): Board {
   }
 }
 
+export type BoardCreationBillingAction = 'subscribe' | 'upgrade'
+
+export class BoardLimitError extends Error {
+  readonly billingAction: BoardCreationBillingAction | null
+
+  constructor(message: string, billingAction: BoardCreationBillingAction | null = null) {
+    super(message)
+    this.name = 'BoardLimitError'
+    this.billingAction = billingAction
+  }
+}
+
+function mapBoardInsertError(rawMessage: string): Error {
+  const message = rawMessage.trim()
+
+  if (message.includes('billing_subscription_required')) {
+    const text =
+      message.split(':').slice(1).join(':').trim() ||
+      'Для создания проекта нужна активная подписка.'
+    return new BoardLimitError(text, 'subscribe')
+  }
+
+  if (message.includes('billing_subscription_inactive')) {
+    const text =
+      message.split(':').slice(1).join(':').trim() ||
+      'Подписка неактивна. Обновите оплату в разделе «Биллинг».'
+    return new BoardLimitError(text, 'subscribe')
+  }
+
+  if (message.includes('light_board_limit')) {
+    const text =
+      message.split(':').slice(1).join(':').trim() ||
+      'На тарифе Light доступен только 1 проект.'
+    return new BoardLimitError(text, 'upgrade')
+  }
+
+  return new Error(message || 'Не удалось создать доску.')
+}
+
 async function requireUserId(): Promise<string> {
   const {
     data: { user },
@@ -108,7 +147,7 @@ export async function createBoard(payload: {
     .select('id, owner_id, title, description, created_at, updated_at')
     .single()
 
-  if (boardError) throw new Error(boardError.message)
+  if (boardError) throw mapBoardInsertError(boardError.message)
 
   const columnInserts = DEFAULT_COLUMNS.map((column, index) => ({
     board_id: boardRow.id,
