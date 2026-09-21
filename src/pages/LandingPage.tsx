@@ -7,7 +7,10 @@ import { Header } from '../components/landing/Header'
 import { HeroSection } from '../components/landing/HeroSection'
 import { ResultsSection } from '../components/landing/ResultsSection'
 import { TelegramSection } from '../components/landing/TelegramSection'
-import { TestimonialPricingSection } from '../components/landing/TestimonialPricingSection'
+import {
+  TestimonialPricingSection,
+  type PricingPlanId,
+} from '../components/landing/TestimonialPricingSection'
 import { TickerBar } from '../components/landing/TickerBar'
 import { useAuth } from '../hooks/useAuth'
 
@@ -22,6 +25,7 @@ export function LandingPage() {
   const { account, loading, refresh, signOut } = useAuth()
   const [authModalOpen, setAuthModalOpen] = useState(false)
   const [authTab, setAuthTab] = useState<AuthTab>('login')
+  const [pendingBillingPlan, setPendingBillingPlan] = useState<PricingPlanId | null>(null)
 
   const openAuthModal = (tab: AuthTab) => {
     setAuthTab(tab)
@@ -30,11 +34,27 @@ export function LandingPage() {
 
   const closeAuthModal = () => {
     setAuthModalOpen(false)
+    setPendingBillingPlan(null)
+  }
+
+  const handlePricingPay = (planId: PricingPlanId) => {
+    if (account) {
+      navigate(`/billing?plan=${planId}`)
+      return
+    }
+    setPendingBillingPlan(planId)
+    openAuthModal('login')
   }
 
   const handleAuthSuccess = async () => {
+    const planAfterLogin = pendingBillingPlan
     await refresh()
-    closeAuthModal()
+    setAuthModalOpen(false)
+    setPendingBillingPlan(null)
+    if (planAfterLogin) {
+      navigate(`/billing?plan=${planAfterLogin}`)
+      return
+    }
     navigate('/boards')
   }
 
@@ -66,7 +86,11 @@ export function LandingPage() {
         <FeaturesSection />
         <ResultsSection />
         <TelegramSection />
-        <TestimonialPricingSection />
+        <TestimonialPricingSection
+          isAuthenticated={Boolean(account)}
+          authLoading={loading}
+          onPayPlan={handlePricingPay}
+        />
       </main>
       <Footer />
       <AuthModal

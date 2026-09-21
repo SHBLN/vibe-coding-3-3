@@ -4,6 +4,7 @@ import { BoardViewPage } from './pages/BoardViewPage'
 import { BoardsPage } from './pages/BoardsPage'
 import { LandingPage } from './pages/LandingPage'
 import { OnboardingPage } from './pages/OnboardingPage'
+import { BillingPage } from './pages/BillingPage'
 import { SettingsPage } from './pages/SettingsPage'
 
 function App() {
@@ -31,6 +32,14 @@ function App() {
         element={
           <ProtectedRoute>
             <SettingsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/billing"
+        element={
+          <ProtectedRoute>
+            <BillingPage />
           </ProtectedRoute>
         }
       />

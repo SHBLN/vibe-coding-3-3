@@ -443,6 +443,12 @@ export function BoardsPage() {
 
           <div className="flex items-center gap-2 sm:gap-3">
             <Link
+              to="/billing"
+              className="rounded-xl border border-navy/10 bg-white px-3 py-2 text-xs font-bold text-navy/70 transition hover:border-accent hover:text-accent"
+            >
+              Биллинг
+            </Link>
+            <Link
               to="/settings"
               className="rounded-xl border border-navy/10 bg-white px-3 py-2 text-xs font-bold text-navy/70 transition hover:border-accent hover:text-accent"
             >

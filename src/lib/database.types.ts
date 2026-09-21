@@ -14,6 +14,88 @@ export type Database = {
   }
   public: {
     Tables: {
+      billing_payments: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          currency: string
+          id: string
+          paid_at: string | null
+          plan_id: string | null
+          status: string
+          stripe_invoice_id: string
+          stripe_payment_intent_id: string | null
+          user_id: string
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string
+          currency?: string
+          id?: string
+          paid_at?: string | null
+          plan_id?: string | null
+          status: string
+          stripe_invoice_id: string
+          stripe_payment_intent_id?: string | null
+          user_id: string
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          currency?: string
+          id?: string
+          paid_at?: string | null
+          plan_id?: string | null
+          status?: string
+          stripe_invoice_id?: string
+          stripe_payment_intent_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'billing_payments_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      billing_subscriptions: {
+        Row: {
+          current_period_end: string | null
+          plan_id: string
+          status: string
+          stripe_subscription_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          current_period_end?: string | null
+          plan_id: string
+          status: string
+          stripe_subscription_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          current_period_end?: string | null
+          plan_id?: string
+          status?: string
+          stripe_subscription_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'billing_subscriptions_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: true
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       board_columns: {
         Row: {
           board_id: string
@@ -133,6 +215,7 @@ export type Database = {
           display_name: string
           id: string
           role: string
+          stripe_customer_id: string | null
           telegram_username: string | null
         }
         Insert: {
@@ -140,6 +223,7 @@ export type Database = {
           display_name: string
           id: string
           role: string
+          stripe_customer_id?: string | null
           telegram_username?: string | null
         }
         Update: {
@@ -147,7 +231,23 @@ export type Database = {
           display_name?: string
           id?: string
           role?: string
+          stripe_customer_id?: string | null
           telegram_username?: string | null
+        }
+        Relationships: []
+      }
+      stripe_webhook_events: {
+        Row: {
+          event_id: string
+          processed_at: string
+        }
+        Insert: {
+          event_id: string
+          processed_at?: string
+        }
+        Update: {
+          event_id?: string
+          processed_at?: string
         }
         Relationships: []
       }

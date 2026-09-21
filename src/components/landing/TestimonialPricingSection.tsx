@@ -1,17 +1,30 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
-import { CheckIcon, OrangeUnderline } from './ui'
+import { ButtonPrimary, CheckIcon, OrangeUnderline } from './ui'
 
-const plans = [
+export type PricingPlanId = 'light' | 'pro' | 'enterprise'
+
+const plans: {
+  id: PricingPlanId
+  name: string
+  price: string
+  period: string
+  description: string
+  features: string[]
+  popular: boolean
+}[] = [
   {
-    name: 'СТАРТ',
-    price: 'Бесплатно',
+    id: 'light',
+    name: 'LIGHT',
+    price: '$9.99',
+    period: '/мес',
     description: 'Для небольших команд и личных проектов',
     features: ['До 3 участников', '1 проект', 'Базовый Kanban', 'Telegram-бот'],
     popular: false,
   },
   {
-    name: 'РОСТ',
-    price: '990 ₽',
+    id: 'pro',
+    name: 'PRO',
+    price: '$19.99',
     period: '/мес',
     description: 'Для растущих команд с ИИ-разбиением',
     features: [
@@ -24,8 +37,10 @@ const plans = [
     popular: true,
   },
   {
-    name: 'МАСШТАБ',
-    price: 'Обсудим',
+    id: 'enterprise',
+    name: 'ENTERPRISE',
+    price: '$29.99',
+    period: '/мес',
     description: 'Для крупных организаций',
     features: [
       'Безлимит участников',
@@ -38,7 +53,17 @@ const plans = [
   },
 ]
 
-export function TestimonialPricingSection() {
+type TestimonialPricingSectionProps = {
+  isAuthenticated: boolean
+  authLoading?: boolean
+  onPayPlan: (planId: PricingPlanId) => void
+}
+
+export function TestimonialPricingSection({
+  isAuthenticated,
+  authLoading = false,
+  onPayPlan,
+}: TestimonialPricingSectionProps) {
   const [annual, setAnnual] = useState(true)
   const pricingGridRef = useRef<HTMLDivElement>(null)
   const [isPricingVisible, setIsPricingVisible] = useState(false)
@@ -140,7 +165,7 @@ export function TestimonialPricingSection() {
                 )}
               </p>
               <p className="mb-6 text-sm text-white/40">{plan.description}</p>
-              <ul className="mt-auto space-y-3">
+              <ul className="mb-6 mt-auto space-y-3">
                 {plan.features.map((feature) => (
                   <li key={feature} className="flex items-center gap-3">
                     <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent text-navy">
@@ -150,6 +175,14 @@ export function TestimonialPricingSection() {
                   </li>
                 ))}
               </ul>
+              <ButtonPrimary
+                type="button"
+                disabled={authLoading}
+                onClick={() => onPayPlan(plan.id)}
+                className="w-full justify-center py-3"
+              >
+                {authLoading ? 'Загрузка…' : isAuthenticated ? 'Оплатить' : 'Войти и оплатить'}
+              </ButtonPrimary>
             </article>
           ))}
         </div>
