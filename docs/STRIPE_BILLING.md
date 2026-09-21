@@ -24,6 +24,8 @@ Or deploy from the Supabase Dashboard / MCP.
 
 ## Stripe webhook
 
+The `stripe-webhook` function verifies signatures with `constructEventAsync` (required in Supabase Edge / Deno).
+
 1. Stripe Dashboard → Developers → Webhooks → Add endpoint.
 2. URL: `https://yxxwpsodzksvxpvizybt.supabase.co/functions/v1/stripe-webhook`
 3. Events:
