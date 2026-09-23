@@ -90,6 +90,53 @@
   .modal-panel {
     animation: modal-slide-in 220ms ease-out;
   }
+
+  .board-columns-area {
+    @apply min-w-0 w-full max-w-full;
+  }
+
+  .board-columns-scroll {
+    @apply overscroll-x-contain;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(13, 27, 62, 0.35) rgba(13, 27, 62, 0.08);
+  }
+
+  .board-columns-scroll::-webkit-scrollbar {
+    height: 10px;
+  }
+
+  .board-columns-scroll::-webkit-scrollbar-track {
+    @apply rounded-full bg-navy/5;
+  }
+
+  .board-columns-scroll::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-navy/30;
+  }
+
+  .board-columns-scroll::-webkit-scrollbar-thumb:hover {
+    @apply bg-navy/45;
+  }
+
+  .board-columns-scroll--panning {
+    @apply cursor-grabbing select-none;
+  }
+
+  .board-columns-scroll:not(.board-columns-scroll--panning) {
+    @apply cursor-grab;
+  }
+
+  .board-columns-scroll-rail {
+    @apply overflow-x-auto overflow-y-hidden py-1;
+    cursor: default;
+  }
+
+  .board-columns-scroll-rail:not(.board-columns-scroll--panning) {
+    cursor: default;
+  }
+
+  .board-column-snap {
+    scroll-snap-align: start;
+  }
 }
 
 @keyframes modal-fade-in {

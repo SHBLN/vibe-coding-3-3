@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import type { BoardCreationBillingAction } from '../../lib/boards'
-import { getProfileInitials } from '../../lib/profiles'
 import type { BoardMessage } from '../../lib/boardChat'
 import { ButtonPrimary } from '../landing/ui'
 
@@ -30,56 +29,43 @@ function formatMessageDate(iso: string) {
 function AiStatusBadge({ message }: { message: BoardMessage }) {
   if (message.aiRunStatus === 'processing') {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-semibold text-accent">
-        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
-        AI разбивает задачу…
+      <span className="inline-flex items-center gap-1 text-[10px] font-medium text-accent">
+        <span className="h-1 w-1 animate-pulse rounded-full bg-accent" />
+        AI…
       </span>
     )
   }
 
   if (message.aiRunStatus === 'success') {
     return (
-      <span className="inline-flex rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
-        Задачи созданы
-      </span>
+      <span className="text-[10px] font-medium text-emerald-700">Задачи созданы</span>
     )
   }
 
-  return (
-    <span className="inline-flex rounded-full bg-red-500/10 px-2 py-0.5 text-[11px] font-semibold text-red-600">
-      Ошибка AI
-    </span>
-  )
+  return <span className="text-[10px] font-medium text-red-600">Ошибка AI</span>
 }
 
 function MessageItem({ message, isOwn }: { message: BoardMessage; isOwn: boolean }) {
-  const initials = getProfileInitials(message.authorName)
-
   return (
     <div className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
       <div
-        className={`max-w-[92%] rounded-2xl border px-3 py-2.5 shadow-sm ${
-          isOwn
-            ? 'border-accent/20 bg-accent/10'
-            : 'border-navy/10 bg-white'
+        className={`max-w-full rounded-xl border px-2.5 py-2 ${
+          isOwn ? 'border-accent/15 bg-accent/5' : 'border-navy/8 bg-surface-alt/50'
         }`}
       >
-        <div className="mb-1.5 flex items-center gap-2">
-          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-navy text-[10px] font-bold text-white">
-            {initials}
-          </span>
-          <div className="min-w-0">
-            <p className="truncate text-xs font-semibold text-navy">{message.authorName}</p>
-            <p className="text-[10px] text-navy/40">{formatMessageDate(message.createdAt)}</p>
-          </div>
+        <div className="mb-1 flex items-baseline justify-between gap-2">
+          <p className="truncate text-[11px] font-semibold text-navy">{message.authorName}</p>
+          <p className="shrink-0 text-[10px] text-navy/40">{formatMessageDate(message.createdAt)}</p>
         </div>
 
-        <p className="whitespace-pre-wrap text-sm text-navy/80">{message.body}</p>
+        <p className="whitespace-pre-wrap text-xs leading-relaxed text-navy/75">{message.body}</p>
 
-        <div className="mt-2 space-y-1">
+        <div className="mt-1.5 space-y-0.5">
           <AiStatusBadge message={message} />
           {message.aiResultSummary ? (
-            <p className="text-[11px] text-navy/55">{message.aiResultSummary}</p>
+            <p className="line-clamp-2 text-[10px] leading-snug text-navy/50">
+              {message.aiResultSummary}
+            </p>
           ) : null}
         </div>
       </div>
@@ -125,18 +111,18 @@ export function BoardChatPanel({
   }
 
   return (
-    <aside className="sticky top-28 flex h-[calc(100vh-8.5rem)] w-full max-w-[360px] shrink-0 flex-col rounded-2xl border border-navy/10 bg-white shadow-sm">
-      <div className="border-b border-navy/10 px-4 py-4">
-        <h2 className="text-lg font-black tracking-[-0.03em] text-navy">Чат задач</h2>
-        <p className="mt-1 text-xs text-navy/50">
+    <aside className="flex min-h-[280px] w-full min-w-0 max-h-[min(420px,50vh)] flex-col overflow-hidden rounded-xl border border-navy/10 bg-white shadow-sm xl:max-h-[calc(100vh-5.75rem)]">
+      <div className="border-b border-navy/8 px-3 py-2.5">
+        <h2 className="text-sm font-bold text-navy">Чат задач</h2>
+        <p className="mt-0.5 text-[11px] leading-snug text-navy/45">
           {aiSplitEnabled
-            ? 'Каждое сообщение создаёт эпик и подзадачи в backlog доски.'
-            : 'ИИ-разбиение недоступно на вашем тарифе — обновите план для постановки через чат.'}
+            ? 'Сообщение → эпик и подзадачи в backlog.'
+            : 'ИИ-разбиение недоступно на вашем тарифе.'}
         </p>
       </div>
 
       {!aiSplitEnabled && aiSplitBlockedMessage ? (
-        <div className="border-b border-amber-400/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-900">
+        <div className="border-b border-amber-400/25 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-900">
           <p>{aiSplitBlockedMessage}</p>
           {aiSplitBillingAction ? (
             <Link
@@ -149,12 +135,12 @@ export function BoardChatPanel({
         </div>
       ) : null}
 
-      <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto px-3 py-4">
+      <div ref={listRef} className="flex-1 space-y-2 overflow-y-auto px-2.5 py-2">
         {loading ? (
-          <p className="text-sm text-navy/45">Загрузка сообщений…</p>
+          <p className="text-xs text-navy/45">Загрузка…</p>
         ) : messages.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-navy/10 bg-surface-alt/60 px-3 py-4 text-sm text-navy/50">
-            Напишите глобальную задачу, например: «Запустить MVP за 2 недели».
+          <div className="rounded-lg border border-dashed border-navy/10 px-2.5 py-3 text-[11px] text-navy/50">
+            Например: «Запустить MVP за 2 недели».
           </div>
         ) : (
           messages.map((message) => (
@@ -167,9 +153,9 @@ export function BoardChatPanel({
         )}
       </div>
 
-      <form onSubmit={handleSubmit} className="border-t border-navy/10 p-4">
+      <form onSubmit={handleSubmit} className="border-t border-navy/8 p-2.5">
         {error || submitError ? (
-          <p className="mb-2 text-xs text-red-600" role="alert">
+          <p className="mb-1.5 text-[11px] text-red-600" role="alert">
             {submitError ?? error}
           </p>
         ) : null}
@@ -181,16 +167,19 @@ export function BoardChatPanel({
           id={`board-chat-input-${boardId}`}
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
-          rows={3}
-          placeholder="Опишите глобальную задачу…"
+          rows={2}
+          placeholder="Глобальная задача…"
           disabled={sending || !aiSplitEnabled}
-          className="w-full resize-none rounded-xl border border-navy/10 bg-surface-alt/40 px-3 py-2 text-sm text-navy outline-none transition focus:border-accent/40 focus:ring-2 focus:ring-accent/15 disabled:opacity-60"
+          className="w-full resize-none rounded-lg border border-navy/10 bg-surface-alt/30 px-2.5 py-2 text-xs text-navy outline-none transition focus:border-accent/40 focus:ring-1 focus:ring-accent/20 disabled:opacity-60"
         />
 
-        <div className="mt-3 flex items-center justify-between gap-3">
-          <p className="text-[11px] text-navy/40">Enter не отправляет — используйте кнопку.</p>
-          <ButtonPrimary type="submit" disabled={sending || !draft.trim() || !aiSplitEnabled}>
-            {sending ? 'Обработка…' : 'Поставить задачу'}
+        <div className="mt-2 flex justify-end">
+          <ButtonPrimary
+            type="submit"
+            disabled={sending || !draft.trim() || !aiSplitEnabled}
+            className="!px-3 !py-1.5 !text-xs"
+          >
+            {sending ? '…' : 'Поставить'}
           </ButtonPrimary>
         </div>
       </form>

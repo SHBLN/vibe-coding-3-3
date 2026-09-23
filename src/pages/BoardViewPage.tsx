@@ -1,10 +1,12 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type CSSProperties,
   type DragEvent,
+  type PointerEvent as ReactPointerEvent,
 } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AssigneePicker } from '../components/board/AssigneePicker'
@@ -261,6 +263,63 @@ function isInteractiveDragTarget(target: EventTarget | null) {
   return Boolean(target.closest('button, input, textarea, a, [role="dialog"], [data-no-drag]'))
 }
 
+function isColumnPanScrollTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false
+  if (target.closest('[data-no-column-pan]')) return false
+  if (target.closest('button, input, textarea, a, [role="dialog"], [data-no-drag]')) return false
+  if (target.closest('[draggable="true"]')) return false
+  return true
+}
+
+type ColumnPanDragState = {
+  pointerId: number
+  startX: number
+  startScrollLeft: number
+}
+
+function getHorizontalWheelDelta(event: WheelEvent): number {
+  // Mouse wheel up/down -> horizontal board scroll; trackpad may send deltaX.
+  let rawDelta = event.deltaY
+  if (rawDelta === 0) {
+    rawDelta = event.deltaX
+  } else if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
+    rawDelta = event.deltaX
+  }
+
+  if (rawDelta === 0) return 0
+
+  if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) {
+    return rawDelta * 48
+  }
+
+  if (event.deltaMode === WheelEvent.DOM_DELTA_PAGE) {
+    return rawDelta * window.innerHeight * 0.25
+  }
+
+  return rawDelta
+}
+
+function shouldMapWheelToColumnScroll(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return true
+  return !target.closest('[data-no-columns-wheel], textarea, select')
+}
+
+function applyHorizontalColumnsWheelScroll(scrollEl: HTMLDivElement, event: WheelEvent): void {
+  if (!shouldMapWheelToColumnScroll(event.target)) return
+  if (event.ctrlKey) return
+
+  const maxScrollLeft = scrollEl.scrollWidth - scrollEl.clientWidth
+  if (maxScrollLeft <= 0) return
+
+  const delta = getHorizontalWheelDelta(event)
+  if (delta === 0) return
+
+  event.preventDefault()
+
+  scrollEl.style.scrollBehavior = 'auto'
+  scrollEl.scrollLeft = Math.max(0, Math.min(maxScrollLeft, scrollEl.scrollLeft + delta))
+}
+
 function BackIcon({ className = 'h-4 w-4' }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -374,6 +433,7 @@ function TaskCard({
   return (
     <article
       draggable={!selectionMode}
+      data-no-column-pan
       onClick={() => {
         if (selectionMode) onToggleSelect(task.id)
       }}
@@ -582,7 +642,7 @@ function BoardColumnSection({
 
   return (
     <section
-      className={`motion-stagger flex w-[312px] shrink-0 flex-col rounded-2xl border bg-surface p-4 shadow-sm transition ${
+      className={`board-column-snap motion-stagger flex w-[312px] shrink-0 flex-col rounded-2xl border bg-surface p-4 shadow-sm transition ${
         isColumnDragging
           ? 'cursor-grabbing border-navy/20 opacity-50'
           : isColumnDropTarget
@@ -799,6 +859,140 @@ function BoardViewContent({
 }: BoardViewContentProps) {
   const totalTasks = columns.reduce((sum, column) => sum + column.tasks.length, 0)
   const selectedCount = selectedTaskIds.size
+  const columnsAreaRef = useRef<HTMLDivElement>(null)
+  const columnsScrollRef = useRef<HTMLDivElement>(null)
+  const columnsScrollTopRef = useRef<HTMLDivElement>(null)
+  const columnsScrollTopInnerRef = useRef<HTMLDivElement>(null)
+  const columnsScrollSyncLockRef = useRef(false)
+  const columnPanDragRef = useRef<ColumnPanDragState | null>(null)
+  const [columnPanActive, setColumnPanActive] = useState(false)
+  const [columnsHorizontallyScrollable, setColumnsHorizontallyScrollable] = useState(false)
+
+  const syncTopColumnsScrollMetrics = useCallback(() => {
+    const scrollEl = columnsScrollRef.current
+    const topScrollEl = columnsScrollTopRef.current
+    const topInnerEl = columnsScrollTopInnerRef.current
+    if (!scrollEl || !topScrollEl || !topInnerEl) return
+
+    topInnerEl.style.width = `${scrollEl.scrollWidth}px`
+    setColumnsHorizontallyScrollable(scrollEl.scrollWidth > scrollEl.clientWidth + 1)
+
+    if (!columnsScrollSyncLockRef.current) {
+      columnsScrollSyncLockRef.current = true
+      topScrollEl.scrollLeft = scrollEl.scrollLeft
+      columnsScrollSyncLockRef.current = false
+    }
+  }, [])
+
+  useEffect(() => {
+    const scrollEl = columnsScrollRef.current
+    const topScrollEl = columnsScrollTopRef.current
+    if (!scrollEl || !topScrollEl) return
+
+    const trackEl = scrollEl.querySelector('[data-board-columns-track]')
+    if (!(trackEl instanceof HTMLElement)) return
+
+    syncTopColumnsScrollMetrics()
+
+    const syncFromMain = () => {
+      if (columnsScrollSyncLockRef.current) return
+      columnsScrollSyncLockRef.current = true
+      topScrollEl.scrollLeft = scrollEl.scrollLeft
+      columnsScrollSyncLockRef.current = false
+    }
+
+    const syncFromTop = () => {
+      if (columnsScrollSyncLockRef.current) return
+      columnsScrollSyncLockRef.current = true
+      scrollEl.scrollLeft = topScrollEl.scrollLeft
+      columnsScrollSyncLockRef.current = false
+    }
+
+    scrollEl.addEventListener('scroll', syncFromMain)
+    topScrollEl.addEventListener('scroll', syncFromTop)
+
+    const resizeObserver = new ResizeObserver(() => {
+      syncTopColumnsScrollMetrics()
+    })
+    resizeObserver.observe(scrollEl)
+    resizeObserver.observe(trackEl)
+
+    return () => {
+      scrollEl.removeEventListener('scroll', syncFromMain)
+      topScrollEl.removeEventListener('scroll', syncFromTop)
+      resizeObserver.disconnect()
+    }
+  }, [columns.length, syncTopColumnsScrollMetrics])
+
+  useLayoutEffect(() => {
+    const area = columnsAreaRef.current
+    const scrollEl = columnsScrollRef.current
+    if (!area || !scrollEl) return
+
+    const handleWheel = (event: WheelEvent) => {
+      if (!(event.target instanceof Node) || !area.contains(event.target)) return
+      applyHorizontalColumnsWheelScroll(scrollEl, event)
+    }
+
+    area.addEventListener('wheel', handleWheel, { passive: false, capture: true })
+
+    return () => {
+      area.removeEventListener('wheel', handleWheel, true)
+    }
+  }, [columns.length, columnsHorizontallyScrollable])
+
+  const endColumnPan = useCallback((pointerId: number) => {
+    const scrollEl = columnsScrollRef.current
+    const drag = columnPanDragRef.current
+    if (!drag || drag.pointerId !== pointerId) return
+
+    columnPanDragRef.current = null
+    setColumnPanActive(false)
+
+    if (scrollEl?.hasPointerCapture(pointerId)) {
+      scrollEl.releasePointerCapture(pointerId)
+    }
+  }, [])
+
+  const handleColumnsPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return
+    if (!isColumnPanScrollTarget(event.target)) return
+
+    const scrollEl = columnsScrollRef.current
+    if (!scrollEl) return
+
+    columnPanDragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startScrollLeft: scrollEl.scrollLeft,
+    }
+    setColumnPanActive(true)
+    scrollEl.setPointerCapture(event.pointerId)
+  }, [])
+
+  const handleColumnsPointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = columnPanDragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+
+    const scrollEl = columnsScrollRef.current
+    if (!scrollEl) return
+
+    scrollEl.scrollLeft = drag.startScrollLeft - (event.clientX - drag.startX)
+  }, [])
+
+  const handleColumnsPointerUp = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      endColumnPan(event.pointerId)
+    },
+    [endColumnPan],
+  )
+
+  const handleColumnsPointerCancel = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      endColumnPan(event.pointerId)
+    },
+    [endColumnPan],
+  )
 
   return (
     <>
@@ -894,8 +1088,37 @@ function BoardViewContent({
         </div>
       ) : null}
 
-      <div className="-mx-4 overflow-x-auto px-4 pb-4 sm:-mx-6 sm:px-6 lg:-mx-10 lg:px-10">
-        <div className="flex min-w-min gap-4">
+      <div
+        ref={columnsAreaRef}
+        data-board-columns-area
+        className="board-columns-area min-w-0 w-full"
+        aria-label="Область колонок доски"
+      >
+        <div
+          className={
+            columnsHorizontallyScrollable
+              ? 'mb-2 min-h-7'
+              : 'pointer-events-none mb-0 h-0 overflow-hidden opacity-0'
+          }
+          aria-hidden={!columnsHorizontallyScrollable}
+        >
+          <div ref={columnsScrollTopRef} className="board-columns-scroll board-columns-scroll-rail w-full">
+            <div ref={columnsScrollTopInnerRef} className="h-px" aria-hidden="true" />
+          </div>
+        </div>
+
+        <div
+          ref={columnsScrollRef}
+          data-board-columns-scroll
+          className={`board-columns-scroll min-w-0 w-full max-w-full overflow-x-scroll overscroll-x-contain pb-4 ${
+            columnPanActive ? 'board-columns-scroll--panning' : ''
+          }`}
+          onPointerDown={handleColumnsPointerDown}
+          onPointerMove={handleColumnsPointerMove}
+          onPointerUp={handleColumnsPointerUp}
+          onPointerCancel={handleColumnsPointerCancel}
+        >
+          <div data-board-columns-track className="flex w-max min-w-full gap-4">
           {columns.map((column, columnIndex) => (
             <BoardColumnSection
               key={column.id}
@@ -934,10 +1157,12 @@ function BoardViewContent({
             type="button"
             onClick={onCreateColumn}
             disabled={crudLocked || selectionMode}
-            className="press-down flex h-[120px] w-[312px] shrink-0 items-center justify-center rounded-2xl border border-dashed border-navy/15 bg-white/60 text-sm font-bold text-navy/45 transition hover:border-accent/40 hover:bg-accent/5 hover:text-accent disabled:opacity-50"
+            data-no-column-pan
+            className="board-column-snap press-down flex h-[120px] w-[312px] shrink-0 items-center justify-center rounded-2xl border border-dashed border-navy/15 bg-white/60 text-sm font-bold text-navy/45 transition hover:border-accent/40 hover:bg-accent/5 hover:text-accent disabled:opacity-50"
           >
             + Колонка
           </button>
+        </div>
         </div>
       </div>
     </>
@@ -1903,8 +2128,8 @@ export function BoardViewPage() {
         ) : null}
 
         {board ? (
-          <div className="flex flex-col gap-6 xl:flex-row xl:items-start">
-            <div className="min-w-0 flex-1">
+          <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_280px] xl:gap-8 2xl:grid-cols-[minmax(0,1fr)_296px]">
+            <div className="min-w-0">
               <BoardViewContent
                 board={board}
                 columns={columns}
@@ -1949,18 +2174,20 @@ export function BoardViewPage() {
               />
             </div>
 
-            <BoardChatPanel
-              boardId={board.id}
-              currentUserId={account.id}
-              messages={chatMessages}
-              loading={chatLoading}
-              sending={chatSending}
-              error={chatError}
-              aiSplitEnabled={aiSplitEnabled}
-              aiSplitBlockedMessage={aiSplitBlockedMessage}
-              aiSplitBillingAction={aiSplitBillingAction}
-              onSendMessage={handleChatSubmit}
-            />
+            <div className="min-w-0 xl:sticky xl:top-[5.25rem] xl:self-start">
+              <BoardChatPanel
+                boardId={board.id}
+                currentUserId={account.id}
+                messages={chatMessages}
+                loading={chatLoading}
+                sending={chatSending}
+                error={chatError}
+                aiSplitEnabled={aiSplitEnabled}
+                aiSplitBlockedMessage={aiSplitBlockedMessage}
+                aiSplitBillingAction={aiSplitBillingAction}
+                onSendMessage={handleChatSubmit}
+              />
+            </div>
           </div>
         ) : (
           <BoardNotFound />
