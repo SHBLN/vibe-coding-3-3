@@ -1,4 +1,5 @@
 import { Route, Routes } from 'react-router-dom'
+import { KnowledgeLiveChatWidget } from './components/KnowledgeLiveChatWidget'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { BoardViewPage } from './pages/BoardViewPage'
 import { BoardsPage } from './pages/BoardsPage'
@@ -9,6 +10,7 @@ import { SettingsPage } from './pages/SettingsPage'
 
 function App() {
   return (
+    <>
     <Routes>
       <Route path="/" element={<LandingPage />} />
       <Route
@@ -52,6 +54,8 @@ function App() {
         }
       />
     </Routes>
+    <KnowledgeLiveChatWidget />
+    </>
   )
 }
 

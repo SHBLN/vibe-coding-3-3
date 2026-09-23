@@ -13,6 +13,7 @@ import {
 } from '../components/landing/TestimonialPricingSection'
 import { TickerBar } from '../components/landing/TickerBar'
 import { useAuth } from '../hooks/useAuth'
+import { LANDING_HOW_IT_WORKS_ID, scrollToLandingSection } from '../lib/landingAnchors'
 
 const dashboardHighlights = [
   { label: 'Активные доски', value: '11' },
@@ -26,6 +27,7 @@ export function LandingPage() {
   const [authModalOpen, setAuthModalOpen] = useState(false)
   const [authTab, setAuthTab] = useState<AuthTab>('login')
   const [pendingBillingPlan, setPendingBillingPlan] = useState<PricingPlanId | null>(null)
+  const [postAuthPath, setPostAuthPath] = useState<string | null>(null)
 
   const openAuthModal = (tab: AuthTab) => {
     setAuthTab(tab)
@@ -35,6 +37,7 @@ export function LandingPage() {
   const closeAuthModal = () => {
     setAuthModalOpen(false)
     setPendingBillingPlan(null)
+    setPostAuthPath(null)
   }
 
   const handlePricingPay = (planId: PricingPlanId) => {
@@ -48,14 +51,41 @@ export function LandingPage() {
 
   const handleAuthSuccess = async () => {
     const planAfterLogin = pendingBillingPlan
+    const redirectPath = postAuthPath
     await refresh()
     setAuthModalOpen(false)
     setPendingBillingPlan(null)
+    setPostAuthPath(null)
     if (planAfterLogin) {
       navigate(`/billing?plan=${planAfterLogin}`)
       return
     }
+    if (redirectPath) {
+      navigate(redirectPath)
+      return
+    }
     navigate('/boards')
+  }
+
+  const requireAuthForPath = (path: string) => {
+    if (account) {
+      navigate(path)
+      return
+    }
+    setPostAuthPath(path)
+    openAuthModal('login')
+  }
+
+  const handleConnectTelegram = () => {
+    requireAuthForPath('/settings')
+  }
+
+  const handleOpenBoards = () => {
+    requireAuthForPath('/boards')
+  }
+
+  const handleHowItWorks = () => {
+    scrollToLandingSection(LANDING_HOW_IT_WORKS_ID)
   }
 
   return (
@@ -81,11 +111,19 @@ export function LandingPage() {
             ))}
           </div>
         </section>
-        <HeroSection />
+        <HeroSection
+          isAuthenticated={Boolean(account)}
+          onRegisterClick={() => openAuthModal('register')}
+          onGoToBoards={() => navigate('/boards')}
+          onHowItWorksClick={handleHowItWorks}
+        />
         <TickerBar />
         <FeaturesSection />
         <ResultsSection />
-        <TelegramSection />
+        <TelegramSection
+          onConnectTelegram={handleConnectTelegram}
+          onOpenBoards={handleOpenBoards}
+        />
         <TestimonialPricingSection
           isAuthenticated={Boolean(account)}
           authLoading={loading}

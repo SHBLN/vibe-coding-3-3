@@ -126,6 +126,61 @@ export async function requestPresignedUpload(
   return data
 }
 
+const MAX_AVATAR_SIZE_BYTES = 2 * 1024 * 1024
+
+const AVATAR_MIME_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'] as const
+
+export function validateAvatarFile(file: File): void {
+  if (file.size <= 0) {
+    throw new Error('Файл пустой.')
+  }
+
+  if (file.size > MAX_AVATAR_SIZE_BYTES) {
+    throw new Error('Аватар слишком большой. Максимум 2 МБ.')
+  }
+
+  const contentType = resolveContentType(file)
+  if (!AVATAR_MIME_TYPES.includes(contentType as (typeof AVATAR_MIME_TYPES)[number])) {
+    throw new Error('Загрузите изображение: JPEG, PNG, GIF или WebP.')
+  }
+}
+
+export async function uploadProfileAvatar(file: File): Promise<string> {
+  validateAvatarFile(file)
+  const contentType = resolveContentType(file)
+
+  const { data, error } = await supabase.functions.invoke<PresignedUploadResponse>('r2-upload-url', {
+    body: {
+      purpose: 'profile_avatar',
+      fileName: file.name,
+      contentType,
+      fileSize: file.size,
+    },
+  })
+
+  if (error) {
+    throw new Error(await getFunctionErrorMessage(error))
+  }
+
+  if (!data?.uploadUrl || !data.publicUrl) {
+    throw new Error('Сервер вернул некорректный ответ для загрузки.')
+  }
+
+  const uploadResponse = await fetch(data.uploadUrl, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': contentType,
+    },
+    body: file,
+  })
+
+  if (!uploadResponse.ok) {
+    throw new Error('Не удалось загрузить аватар.')
+  }
+
+  return data.publicUrl
+}
+
 export async function uploadFileToR2(taskId: string, file: File): Promise<AttachmentMeta> {
   const { uploadUrl, publicUrl } = await requestPresignedUpload(taskId, file)
 

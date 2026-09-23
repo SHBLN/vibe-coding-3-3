@@ -560,3 +560,68 @@ Edge Function: `supabase/functions/telegram-ok-reply/index.ts`
 - Edge Functions: `stripe-cancel-subscription`, `stripe-upgrade-subscription`; обновлены checkout/webhook.
 - Повышение только Light → Pro → Enterprise; понижение после отмены и конца периода.
 - Документация: `docs/STRIPE_BILLING.md`, `docs/BILLING_PLAN_LIMITS.md`.
+
+---
+
+## 2026-09-23 — KB чат, профиль и UX-обновления
+
+### 1) Глобальный лайв-чат базы знаний
+- Добавлен виджет `src/components/KnowledgeLiveChatWidget.tsx`, доступный на всех страницах (включая доски).
+- Интеграция с Supabase Edge Function `dify-knowledge-query` через `src/lib/knowledgeQuery.ts`.
+- UX чата:
+  - история сообщений, статусы ожидания ответа;
+  - быстрые подсказки запросов;
+  - рендер `sources` (документ, score, excerpt);
+  - дружественная нормализация ошибок провайдера.
+
+### 2) Лендинг: исправление CTA и навигации
+- Кнопки на лендинге перестали быть заглушками:
+  - Hero CTA ведет в регистрацию/доски в зависимости от авторизации;
+  - кнопка «Как это работает» скроллит к секции;
+  - Telegram CTA ведет в `/settings` (или в логин с post-auth redirect).
+- Добавлен общий helper якорей: `src/lib/landingAnchors.ts`.
+- В header для авторизованных добавлена кнопка/ссылка «Доски».
+- В секции тарифов удален переключатель «Ежегодно», оставлены помесячные цены.
+
+### 3) Настройки профиля: расширенный кабинет
+- Страница `src/pages/SettingsPage.tsx` разбита на отдельные секции:
+  - Профиль (имя, должность, email readonly);
+  - Telegram (username);
+  - Безопасность (смена пароля для email-login).
+- Добавлен кастомный селект должности: `src/components/RoleSelectField.tsx`.
+- В местах, где упоминается Telegram, используется единая иконка `TelegramIcon` (добавлена в `src/components/landing/ui.tsx`).
+
+### 4) Аватары пользователя
+- Добавлена поддержка аватаров:
+  - 5 встроенных пресетов;
+  - загрузка собственного изображения в R2 (до 2 МБ, только image/*).
+- Новые файлы:
+  - `src/lib/profileAvatar.ts`;
+  - `src/components/UserAvatar.tsx`;
+  - `src/components/settings/AvatarPicker.tsx`.
+- `AccountBadge` обновлен:
+  - показывает выбранный аватар;
+  - клик по блоку профиля открывает `/settings`.
+
+### 5) БД и серверные изменения под аватары
+- Миграция: `supabase/migrations/20260923193000_profile_avatars.sql`:
+  - `profiles.avatar_preset`;
+  - `profiles.avatar_url`.
+- `supabase/functions/r2-upload-url/index.ts` расширена:
+  - добавлен `purpose=profile_avatar`;
+  - отдельные лимиты и mime-валидация для аватаров.
+- Обновлены типы БД: `src/lib/database.types.ts`.
+
+### 6) Устойчивость авторизации и модалки
+- Исправлен конфликт слоев: `AuthModal` поднят выше плавающего KB-чата (`z-[110]`).
+- В `src/lib/auth.ts` добавлен fallback чтения профиля без avatar-колонок:
+  - если миграция еще не применена, вход не ломается;
+  - пользователь остается авторизованным даже при частичной несовместимости схемы.
+- В `src/lib/supabase.ts` добавлен project URL по умолчанию и строгая проверка наличия publishable key.
+
+### 7) Деплой
+- Фронтенд деплоится через `npm run deploy` (Wrangler).
+- Для полного запуска аватаров в production необходимо:
+  1) применить миграцию БД (`supabase db push` или SQL в Dashboard);
+  2) задеплоить Edge Function `r2-upload-url`;
+  3) убедиться, что client build получает `VITE_SUPABASE_URL` и `VITE_SUPABASE_ANON_KEY`.

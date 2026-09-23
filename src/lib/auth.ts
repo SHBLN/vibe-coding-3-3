@@ -8,6 +8,8 @@ export type ProfileRow = {
   display_name: string
   role: string
   created_at: string
+  avatar_preset: string | null
+  avatar_url: string | null
 }
 
 export type RegisterPayload = {
@@ -113,6 +115,54 @@ export async function signUpWithProfile({
   }
 }
 
+type ProfileRowBase = Pick<ProfileRow, 'id' | 'display_name' | 'role' | 'created_at'>
+
+function isMissingAvatarColumnsError(message: string): boolean {
+  const normalized = message.toLowerCase()
+  return normalized.includes('avatar_preset') || normalized.includes('avatar_url')
+}
+
+async function fetchProfileRow(userId: string): Promise<ProfileRow | null> {
+  const extended = await supabase
+    .from('profiles')
+    .select('id, display_name, role, created_at, avatar_preset, avatar_url')
+    .eq('id', userId)
+    .maybeSingle()
+
+  if (!extended.error) {
+    if (!extended.data) return null
+    return {
+      ...extended.data,
+      avatar_preset: extended.data.avatar_preset ?? null,
+      avatar_url: extended.data.avatar_url ?? null,
+    }
+  }
+
+  if (!isMissingAvatarColumnsError(extended.error.message)) {
+    throw new Error(extended.error.message)
+  }
+
+  const basic = await supabase
+    .from('profiles')
+    .select('id, display_name, role, created_at')
+    .eq('id', userId)
+    .maybeSingle()
+    .returns<ProfileRowBase>()
+
+  if (basic.error) {
+    throw new Error(basic.error.message)
+  }
+
+  const row = basic.data
+  if (!row) return null
+
+  return {
+    ...row,
+    avatar_preset: null,
+    avatar_url: null,
+  }
+}
+
 export async function getCurrentProfile(): Promise<ProfileRow | null> {
   const {
     data: { user },
@@ -120,17 +170,7 @@ export async function getCurrentProfile(): Promise<ProfileRow | null> {
 
   if (!user) return null
 
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('id, display_name, role, created_at')
-    .eq('id', user.id)
-    .maybeSingle()
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  return data
+  return fetchProfileRow(user.id)
 }
 
 export type AuthAccount = {
@@ -139,6 +179,8 @@ export type AuthAccount = {
   displayName: string
   role: string
   profileComplete: boolean
+  avatarPreset: string | null
+  avatarUrl: string | null
 }
 
 export type UpdateProfilePayload = {
@@ -207,7 +249,13 @@ export async function getAuthAccount(): Promise<AuthAccount | null> {
 
   if (!user) return null
 
-  const profile = await getCurrentProfile()
+  let profile: ProfileRow | null = null
+  try {
+    profile = await fetchProfileRow(user.id)
+  } catch {
+    profile = null
+  }
+
   const metadataRole = user.user_metadata?.role as string | undefined
   const role = profile?.role ?? metadataRole ?? DEFAULT_UNSELECTED_ROLE
 
@@ -221,6 +269,8 @@ export async function getAuthAccount(): Promise<AuthAccount | null> {
       'Пользователь',
     role,
     profileComplete: isProfileComplete(profile, role),
+    avatarPreset: profile?.avatar_preset ?? null,
+    avatarUrl: profile?.avatar_url ?? null,
   }
 }
 
@@ -228,5 +278,23 @@ export async function signOut() {
   const { error } = await supabase.auth.signOut()
   if (error) {
     throw new Error(error.message)
+  }
+}
+
+export function userHasEmailPasswordLogin(
+  user: { identities?: { provider: string }[] | null },
+): boolean {
+  return user.identities?.some((identity) => identity.provider === 'email') ?? false
+}
+
+export async function updateUserPassword(password: string): Promise<void> {
+  if (password.length < 6) {
+    throw new Error('Пароль должен быть не короче 6 символов.')
+  }
+
+  const { error } = await supabase.auth.updateUser({ password })
+
+  if (error) {
+    throw new Error(mapAuthError(error.message))
   }
 }

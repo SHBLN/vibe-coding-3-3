@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
+import { type AnyModelConfig, callAnyModelChat, readAnyModelConfig } from '../_shared/anymodel.ts'
 import { getAiSplitDenialReason } from '../_shared/planLimits.ts'
 
 const corsHeaders = {
@@ -7,8 +8,6 @@ const corsHeaders = {
     'authorization, x-client-info, apikey, content-type, x-telegram-internal-secret',
 }
 
-const DEFAULT_BASE_URL = 'https://anymodel.org/v1'
-const DEFAULT_MODEL = 'cx/gpt-5.6-luna'
 const DONE_STATUS = 'done'
 const DEFAULT_UNSELECTED_ROLE = 'Team Member'
 
@@ -227,61 +226,6 @@ function pickAssignee(
   }
 }
 
-async function callAnyModel(
-  apiKey: string,
-  baseUrl: string,
-  model: string,
-  systemPrompt: string,
-  userPrompt: string,
-): Promise<string> {
-  const response = await fetch(`${baseUrl}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model,
-      temperature: 0.2,
-      max_tokens: 2000,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-    }),
-  })
-
-  const responseText = await response.text()
-  let providerData: Record<string, unknown> | null = null
-
-  if (responseText) {
-    try {
-      providerData = JSON.parse(responseText) as Record<string, unknown>
-    } catch {
-      providerData = { raw: responseText }
-    }
-  }
-
-  if (!response.ok) {
-    throw new Error(
-      `AnyModel request failed (${response.status}): ${JSON.stringify(providerData)}`,
-    )
-  }
-
-  const choices = providerData?.choices
-  if (!Array.isArray(choices) || choices.length === 0) {
-    throw new Error('AnyModel returned empty choices')
-  }
-
-  const message = choices[0] as { message?: { content?: string } }
-  const content = message.message?.content
-  if (!content || typeof content !== 'string') {
-    throw new Error('AnyModel returned empty message content')
-  }
-
-  return content
-}
-
 async function getNextPosition(
   supabase: ReturnType<typeof createClient>,
   boardId: string,
@@ -345,9 +289,7 @@ async function resolveBacklogColumn(
 async function splitGlobalTask(
   supabase: ReturnType<typeof createClient>,
   payload: SplitGlobalTaskRequest,
-  anymodelApiKey: string,
-  baseUrl: string,
-  defaultModel: string,
+  anyModelConfig: AnyModelConfig,
 ): Promise<SplitResult> {
   const { boardId, columnId, status, title, description, dueAt } = payload
   if (!boardId || !title?.trim()) {
@@ -384,10 +326,8 @@ async function splitGlobalTask(
   const warnings: string[] = []
   const unmatchedRoles: string[] = []
 
-  const aiContent = await callAnyModel(
-    anymodelApiKey,
-    baseUrl,
-    defaultModel,
+  const aiContent = await callAnyModelChat(
+    anyModelConfig,
     buildSystemPrompt(eligibleProfiles),
     buildUserPrompt({ ...payload, title: title.trim() }),
   )
@@ -538,18 +478,18 @@ Deno.serve(async (req) => {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')
   const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-  const anymodelApiKey = Deno.env.get('ANYMODEL_API_KEY')
-  const baseUrl = (Deno.env.get('ANYMODEL_BASE_URL') ?? DEFAULT_BASE_URL).replace(/\/+$/, '')
-  const defaultModel = Deno.env.get('ANYMODEL_MODEL') ?? DEFAULT_MODEL
+  const anyModelEnv = readAnyModelConfig()
 
   const missingKeys: string[] = []
   if (!supabaseUrl) missingKeys.push('SUPABASE_URL')
   if (!supabaseAnonKey) missingKeys.push('SUPABASE_ANON_KEY')
-  if (!anymodelApiKey) missingKeys.push('ANYMODEL_API_KEY')
+  if ('missingKeys' in anyModelEnv) missingKeys.push(...anyModelEnv.missingKeys)
 
   if (missingKeys.length > 0) {
     return jsonResponse({ error: 'Server is not configured', missingKeys }, 500)
   }
+
+  const anyModelConfig = anyModelEnv as AnyModelConfig
 
   let payload: SplitGlobalTaskRequest
   try {
@@ -592,7 +532,7 @@ Deno.serve(async (req) => {
     }
 
     try {
-      const result = await splitGlobalTask(supabase, payload, anymodelApiKey, baseUrl, defaultModel)
+      const result = await splitGlobalTask(supabase, payload, anyModelConfig)
       return jsonResponse({ ...result, boardTitle: board.title, source: 'telegram' })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to split task with AI'
@@ -634,7 +574,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const result = await splitGlobalTask(supabase, payload, anymodelApiKey, baseUrl, defaultModel)
+    const result = await splitGlobalTask(supabase, payload, anyModelConfig)
     return jsonResponse({ ...result, source: 'web' })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to split task with AI'

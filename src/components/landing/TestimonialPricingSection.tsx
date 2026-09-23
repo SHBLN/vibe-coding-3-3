@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
-import { ButtonPrimary, CheckIcon, OrangeUnderline } from './ui'
+import { ButtonPrimary, CheckIcon, OrangeUnderline, TelegramIcon } from './ui'
 
 export type PricingPlanId = 'light' | 'pro' | 'enterprise'
 
@@ -66,7 +66,6 @@ export function TestimonialPricingSection({
   authLoading = false,
   onPayPlan,
 }: TestimonialPricingSectionProps) {
-  const [annual, setAnnual] = useState(true)
   const pricingGridRef = useRef<HTMLDivElement>(null)
   const [isPricingVisible, setIsPricingVisible] = useState(false)
 
@@ -116,27 +115,7 @@ export function TestimonialPricingSection({
             Начните с малого. <OrangeUnderline>Стройте большое.</OrangeUnderline>
           </h2>
 
-          <div className="mt-8 inline-flex rounded-xl border border-navy/10 bg-surface-alt p-1">
-            <button
-              type="button"
-              onClick={() => setAnnual(false)}
-              className={`rounded-lg px-5 py-2 text-sm font-semibold transition ${
-                !annual ? 'bg-navy text-white' : 'text-navy/60 hover:text-navy'
-              }`}
-            >
-              Ежемесячно
-            </button>
-            <button
-              type="button"
-              onClick={() => setAnnual(true)}
-              className={`rounded-lg px-5 py-2 text-sm font-semibold transition ${
-                annual ? 'bg-navy text-white' : 'text-navy/60 hover:text-navy'
-              }`}
-            >
-              Ежегодно
-              <span className="ml-1.5 text-xs text-accent">Экономия 20%</span>
-            </button>
-          </div>
+          <p className="mt-4 text-sm font-semibold text-navy/55">Все цены указаны за месяц.</p>
         </div>
 
         <div ref={pricingGridRef} className="grid gap-5 md:grid-cols-3">
@@ -168,14 +147,25 @@ export function TestimonialPricingSection({
               </p>
               <p className="mb-6 text-sm text-white/40">{plan.description}</p>
               <ul className="mb-6 mt-auto space-y-3">
-                {plan.features.map((feature) => (
-                  <li key={feature} className="flex items-center gap-3">
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent text-navy">
-                      <CheckIcon />
-                    </span>
-                    <span className="text-sm text-white/80">{feature}</span>
-                  </li>
-                ))}
+                {plan.features.map((feature) => {
+                  const isTelegramFeature = feature.toLowerCase().includes('telegram')
+                  return (
+                    <li key={feature} className="flex items-center gap-3">
+                      <span
+                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
+                          isTelegramFeature ? 'bg-[#229ED9] text-white' : 'bg-accent text-navy'
+                        }`}
+                      >
+                        {isTelegramFeature ? (
+                          <TelegramIcon className="h-3 w-3" />
+                        ) : (
+                          <CheckIcon />
+                        )}
+                      </span>
+                      <span className="text-sm text-white/80">{feature}</span>
+                    </li>
+                  )
+                })}
               </ul>
               <ButtonPrimary
                 type="button"

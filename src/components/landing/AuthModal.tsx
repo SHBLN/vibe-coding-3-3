@@ -474,7 +474,7 @@ export function AuthModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-[110] flex items-center justify-center p-4"
       role="presentation"
       onMouseDown={(event) => {
         if (!loading && event.target === event.currentTarget) onClose()

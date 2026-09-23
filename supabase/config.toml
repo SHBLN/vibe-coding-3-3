@@ -6,6 +6,9 @@ verify_jwt = true
 [functions.anymodel-chat]
 verify_jwt = true
 
+[functions.dify-knowledge-query]
+verify_jwt = false
+
 [functions.telegram-ok-reply]
 verify_jwt = false
 

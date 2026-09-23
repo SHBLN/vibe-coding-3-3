@@ -247,6 +247,8 @@ export type Database = {
       }
       profiles: {
         Row: {
+          avatar_preset: string | null
+          avatar_url: string | null
           created_at: string
           display_name: string
           id: string
@@ -255,6 +257,8 @@ export type Database = {
           telegram_username: string | null
         }
         Insert: {
+          avatar_preset?: string | null
+          avatar_url?: string | null
           created_at?: string
           display_name: string
           id: string
@@ -263,6 +267,8 @@ export type Database = {
           telegram_username?: string | null
         }
         Update: {
+          avatar_preset?: string | null
+          avatar_url?: string | null
           created_at?: string
           display_name?: string
           id?: string

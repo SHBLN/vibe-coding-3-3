@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { ArrowUpRightIcon, ButtonPrimary, LogoIcon } from './ui'
 import { AccountBadge } from './AccountBadge'
 import type { AuthAccount } from '../../lib/auth'
@@ -34,14 +35,14 @@ export function Header({
   return (
     <header className="sticky top-0 z-40 border-b border-navy/10 bg-surface/95 backdrop-blur">
       <div className="section-shell flex h-20 items-center justify-between">
-        <a href="#" aria-label="AiVibeBoard — на главную" className="flex items-center gap-2.5">
+        <Link to="/" aria-label="AiVibeBoard — на главную" className="flex items-center gap-2.5">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-navy text-accent shadow-card">
             <LogoIcon />
           </div>
           <span className="text-xl font-black tracking-[-0.04em] text-navy">
             AI VIBE<span className="text-accent">.</span>
           </span>
-        </a>
+        </Link>
 
         <nav
           aria-label="Основная навигация"
@@ -56,13 +57,29 @@ export function Header({
               {link}
             </a>
           ))}
+          {account ? (
+            <Link
+              to="/boards"
+              className="rounded-xl px-4 py-2 text-sm font-semibold text-navy/65 transition hover:bg-navy hover:text-white"
+            >
+              Доски
+            </Link>
+          ) : null}
         </nav>
 
         <div className="flex items-center gap-3">
           {authLoading ? (
             <span className="text-sm text-navy/50">Загрузка…</span>
           ) : account ? (
-            <AccountBadge account={account} onSignOut={handleSignOut} signingOut={signingOut} />
+            <>
+              <Link
+                to="/boards"
+                className="rounded-xl border border-navy/10 bg-white px-3 py-2 text-sm font-bold text-navy/70 transition hover:border-accent hover:text-accent md:hidden"
+              >
+                Доски
+              </Link>
+              <AccountBadge account={account} onSignOut={handleSignOut} signingOut={signingOut} />
+            </>
           ) : (
             <>
               <button

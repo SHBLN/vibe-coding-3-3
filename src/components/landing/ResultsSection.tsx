@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { LANDING_HOW_IT_WORKS_ID } from '../../lib/landingAnchors'
 import { ArrowUpRightIcon, OrangeUnderline } from './ui'
 
 const stats = [
@@ -62,7 +63,7 @@ export function ResultsSection() {
               и больше — на работу, которая двигает проект вперёд.
             </p>
             <a
-              href="#"
+              href={`#${LANDING_HOW_IT_WORKS_ID}`}
               className="inline-flex items-center gap-2 text-sm font-semibold text-white transition hover:text-accent"
             >
               Смотреть рабочий процесс команды
@@ -81,7 +82,7 @@ export function ResultsSection() {
           </div>
         </div>
 
-        <div id="как-это-работает" className="grid gap-5 lg:grid-cols-2">
+        <div id={LANDING_HOW_IT_WORKS_ID} className="grid gap-5 lg:grid-cols-2">
           <article className="dot-grid rounded-2xl border border-navy/10 bg-surface p-8 lg:p-10">
             <p className="mb-4 text-xs font-semibold uppercase tracking-[0.2em] text-navy/40">
               Как это работает

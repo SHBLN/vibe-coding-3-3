@@ -64,7 +64,27 @@ function DashboardMockup() {
   )
 }
 
-export function HeroSection() {
+type HeroSectionProps = {
+  isAuthenticated: boolean
+  onRegisterClick: () => void
+  onGoToBoards: () => void
+  onHowItWorksClick: () => void
+}
+
+export function HeroSection({
+  isAuthenticated,
+  onRegisterClick,
+  onGoToBoards,
+  onHowItWorksClick,
+}: HeroSectionProps) {
+  const handlePrimaryCta = () => {
+    if (isAuthenticated) {
+      onGoToBoards()
+      return
+    }
+    onRegisterClick()
+  }
+
   return (
     <section className="section-shell pb-5">
       <div className="relative overflow-hidden rounded-3xl bg-navy shadow-hero">
@@ -89,12 +109,13 @@ export function HeroSection() {
             </p>
 
             <div className="mb-8 flex flex-wrap items-center gap-4">
-              <ButtonPrimary className="px-6 py-3.5">
-                Начать бесплатно
+              <ButtonPrimary className="px-6 py-3.5" onClick={handlePrimaryCta}>
+                {isAuthenticated ? 'Открыть доски' : 'Начать бесплатно'}
                 <ArrowUpRightIcon />
               </ButtonPrimary>
               <button
                 type="button"
+                onClick={onHowItWorksClick}
                 className="inline-flex items-center gap-2 text-sm font-semibold text-white/70 transition hover:text-white"
               >
                 <span className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/10">
