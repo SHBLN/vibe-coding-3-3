@@ -278,7 +278,7 @@ export function SettingsPage() {
             </p>
           </div>
 
-          <section className="panel-shell p-6">
+          <section id="profile-settings" className="panel-shell scroll-mt-24 p-6">
             <h2 className="text-base font-bold text-navy">Профиль</h2>
             <p className="mt-1 text-xs text-navy/55">
               Имя и должность видны команде при назначении задач.
@@ -287,6 +287,7 @@ export function SettingsPage() {
             <form className="mt-5 space-y-4" onSubmit={(event) => void handleProfileSubmit(event)}>
               <SettingsAlert error={profileError} success={profileSuccess} />
 
+              <div id="avatar-settings" className="scroll-mt-24">
               <AvatarPicker
                 displayName={displayName || account.displayName}
                 avatarPreset={avatarPreset}
@@ -300,6 +301,7 @@ export function SettingsPage() {
                 onError={setProfileError}
                 onSuccess={setProfileSuccess}
               />
+              </div>
 
               <div className="space-y-2">
                 <label htmlFor="settings-email" className="block text-sm font-semibold text-navy">
@@ -360,7 +362,7 @@ export function SettingsPage() {
             </form>
           </section>
 
-          <section className="panel-shell p-6">
+          <section id="telegram-settings" className="panel-shell scroll-mt-24 p-6">
             <div className="mb-5 flex items-start gap-3 rounded-2xl border border-[#229ED9]/25 bg-[#229ED9]/8 px-4 py-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#229ED9] text-white shadow-sm">
                 <TelegramIcon className="h-5 w-5" />
@@ -433,7 +435,7 @@ export function SettingsPage() {
             </form>
           </section>
 
-          <section className="panel-shell p-6">
+          <section id="security-settings" className="panel-shell scroll-mt-24 p-6">
             <h2 className="text-base font-bold text-navy">Безопасность</h2>
             <p className="mt-1 text-xs text-navy/55">Смена пароля для входа по email.</p>
 

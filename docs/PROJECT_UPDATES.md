@@ -625,3 +625,43 @@ Edge Function: `supabase/functions/telegram-ok-reply/index.ts`
   1) применить миграцию БД (`supabase db push` или SQL в Dashboard);
   2) задеплоить Edge Function `r2-upload-url`;
   3) убедиться, что client build получает `VITE_SUPABASE_URL` и `VITE_SUPABASE_ANON_KEY`.
+
+---
+
+## 2026-09-28 — UX меню профиля и глобальная смена палитры
+
+### 1) Меню профиля вместо большого modal/iframe
+- В `src/components/landing/AccountBadge.tsx` убран полноэкранный `iframe` настроек.
+- По клику на бейдж аккаунта теперь открывается компактное dropdown-меню:
+  - `Настройка профиля`
+  - `Настройка аватара`
+  - `Настройка Telegram`
+  - `Безопасность`
+- Пункты ведут на `/settings` с hash-якорями и закрывают меню при выборе.
+- Добавлено UX-поведение:
+  - закрытие по клику вне меню;
+  - закрытие по `Escape`.
+
+### 2) Якоря секций на странице настроек
+- В `src/pages/SettingsPage.tsx` добавлены id-секции и отступы для корректного позиционирования под sticky-header:
+  - `#profile-settings`
+  - `#avatar-settings`
+  - `#telegram-settings`
+  - `#security-settings`
+- Класс `scroll-mt-24` добавлен для точного скролла к нужному блоку.
+
+### 3) Глобальная цветовая тема (все страницы)
+- Базовая палитра проекта обновлена на уровне дизайн-токенов (`tailwind.config.js`):
+  - основной фон/поверхности → бежевые;
+  - акцентные кнопки и выделения → оранжевые;
+  - прежний темно-синий (`navy`) → темно-бежевые оттенки.
+- Обновлены тени карточек/hero/buttons под новую гамму.
+- В `src/index.css` скорректированы цвета служебных элементов:
+  - `dot-grid`;
+  - цвета скроллбаров board-area.
+
+### Затронутые файлы
+- `src/components/landing/AccountBadge.tsx`
+- `src/pages/SettingsPage.tsx`
+- `tailwind.config.js`
+- `src/index.css`

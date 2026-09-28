@@ -32,7 +32,7 @@
   }
 
   .dot-grid {
-    background-image: radial-gradient(rgba(13, 27, 62, 0.15) 1px, transparent 1px);
+    background-image: radial-gradient(rgba(95, 75, 58, 0.15) 1px, transparent 1px);
     background-size: 22px 22px;
   }
 
@@ -98,7 +98,7 @@
   .board-columns-scroll {
     @apply overscroll-x-contain;
     scrollbar-width: thin;
-    scrollbar-color: rgba(13, 27, 62, 0.35) rgba(13, 27, 62, 0.08);
+    scrollbar-color: rgba(95, 75, 58, 0.35) rgba(95, 75, 58, 0.08);
   }
 
   .board-columns-scroll::-webkit-scrollbar {

@@ -5,19 +5,19 @@ export default {
     extend: {
       colors: {
         navy: {
-          DEFAULT: '#0F172A',
-          light: '#1E293B',
-          muted: '#334155',
+          DEFAULT: '#5F4B3A',
+          light: '#7A644F',
+          muted: '#9A8168',
         },
         accent: {
-          DEFAULT: '#3B82F6',
-          light: '#60A5FA',
-          dark: '#2563EB',
+          DEFAULT: '#E67E22',
+          light: '#F2A65A',
+          dark: '#C96A18',
         },
         surface: {
-          DEFAULT: '#F1F5F9',
-          alt: '#E2E8F0',
-          card: '#FFFFFF',
+          DEFAULT: '#F5EBDD',
+          alt: '#EADCC8',
+          card: '#FFF8EE',
         },
         success: '#10B981',
         warning: '#F59E0B',
@@ -32,9 +32,9 @@ export default {
         '6xl': '3.5rem',
       },
       boxShadow: {
-        card: '0 12px 36px rgba(15, 23, 42, 0.12)',
-        hero: '0 30px 90px rgba(15, 23, 42, 0.20)',
-        button: '0 14px 30px rgba(37, 99, 235, 0.35)',
+        card: '0 12px 36px rgba(95, 75, 58, 0.15)',
+        hero: '0 30px 90px rgba(95, 75, 58, 0.22)',
+        button: '0 14px 30px rgba(201, 106, 24, 0.35)',
       },
     },
   },

@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { AuthAccount } from '../../lib/auth'
 import { UserAvatar } from '../UserAvatar'
@@ -9,6 +10,32 @@ type AccountBadgeProps = {
 }
 
 export function AccountBadge({ account, onSignOut, signingOut = false }: AccountBadgeProps) {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!menuOpen) return
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const node = menuRef.current
+      if (!node || !(event.target instanceof Node)) return
+      if (!node.contains(event.target)) {
+        setMenuOpen(false)
+      }
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMenuOpen(false)
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [menuOpen])
+
   const avatarProps = {
     displayName: account.displayName,
     avatarPreset: account.avatarPreset,
@@ -16,27 +43,76 @@ export function AccountBadge({ account, onSignOut, signingOut = false }: Account
   }
 
   return (
+    <>
     <div className="flex items-center gap-2 sm:gap-3">
-      <Link
-        to="/settings"
-        title="Настройки профиля"
-        className="hidden items-center gap-3 rounded-2xl border border-navy/10 bg-white px-3 py-2 transition hover:border-accent/40 hover:shadow-sm sm:flex"
-      >
-        <UserAvatar {...avatarProps} />
-        <div className="min-w-0">
-          <p className="truncate text-sm font-bold text-navy">{account.displayName}</p>
-          <p className="truncate text-xs text-navy/55">{account.role}</p>
-        </div>
-      </Link>
+      <div ref={menuRef} className="relative">
+        <button
+          type="button"
+          onClick={() => setMenuOpen((prev) => !prev)}
+          title="Меню профиля"
+          aria-expanded={menuOpen}
+          aria-haspopup="menu"
+          className="hidden items-center gap-3 rounded-2xl border border-navy/10 bg-white px-3 py-2 transition hover:border-accent/40 hover:shadow-sm sm:flex"
+        >
+          <UserAvatar {...avatarProps} />
+          <div className="min-w-0">
+            <p className="truncate text-sm font-bold text-navy">{account.displayName}</p>
+            <p className="truncate text-xs text-navy/55">{account.role}</p>
+          </div>
+        </button>
 
-      <Link
-        to="/settings"
-        title="Настройки профиля"
-        className="flex sm:hidden"
-        aria-label="Настройки профиля"
-      >
-        <UserAvatar {...avatarProps} />
-      </Link>
+        <button
+          type="button"
+          onClick={() => setMenuOpen((prev) => !prev)}
+          title="Меню профиля"
+          className="flex sm:hidden"
+          aria-label="Меню профиля"
+          aria-expanded={menuOpen}
+          aria-haspopup="menu"
+        >
+          <UserAvatar {...avatarProps} />
+        </button>
+
+        {menuOpen ? (
+          <div
+            role="menu"
+            className="absolute right-0 top-[calc(100%+8px)] z-[120] w-56 overflow-hidden rounded-xl border border-navy/10 bg-white p-1.5 shadow-card"
+          >
+            <Link
+              to="/settings#profile-settings"
+              role="menuitem"
+              onClick={() => setMenuOpen(false)}
+              className="block rounded-lg px-3 py-2 text-sm text-navy/80 transition hover:bg-surface-alt hover:text-navy"
+            >
+              Настройка профиля
+            </Link>
+            <Link
+              to="/settings#avatar-settings"
+              role="menuitem"
+              onClick={() => setMenuOpen(false)}
+              className="block rounded-lg px-3 py-2 text-sm text-navy/80 transition hover:bg-surface-alt hover:text-navy"
+            >
+              Настройка аватара
+            </Link>
+            <Link
+              to="/settings#telegram-settings"
+              role="menuitem"
+              onClick={() => setMenuOpen(false)}
+              className="block rounded-lg px-3 py-2 text-sm text-navy/80 transition hover:bg-surface-alt hover:text-navy"
+            >
+              Настройка Telegram
+            </Link>
+            <Link
+              to="/settings#security-settings"
+              role="menuitem"
+              onClick={() => setMenuOpen(false)}
+              className="block rounded-lg px-3 py-2 text-sm text-navy/80 transition hover:bg-surface-alt hover:text-navy"
+            >
+              Безопасность
+            </Link>
+          </div>
+        ) : null}
+      </div>
 
       <button
         type="button"
@@ -47,6 +123,7 @@ export function AccountBadge({ account, onSignOut, signingOut = false }: Account
         {signingOut ? 'Выход…' : 'Выйти'}
       </button>
     </div>
+    </>
   )
 }
 
