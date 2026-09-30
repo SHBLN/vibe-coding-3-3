@@ -1,5 +1,9 @@
+import { apiPublicRequest, apiRequest, isPythonApiEnabled } from './apiClient'
 import { DEFAULT_UNSELECTED_ROLE, isRoleSelected } from './roles'
 import { supabase } from './supabase'
+import { getAuthUserOrNull, getAuthUserOrThrow, getDefaultDisplayNameFromUser } from './authSession'
+import { mapAuthErrorMessage } from './errorMapping'
+import { toResult, unwrapResult, type Result } from './result'
 
 export { isRoleSelected } from './roles'
 
@@ -24,33 +28,62 @@ export type LoginPayload = {
   password: string
 }
 
-function mapAuthError(message: string): string {
-  const normalized = message.toLowerCase()
+type BackendAuthSessionResponse = {
+  accessToken: string | null
+  refreshToken: string | null
+  user: { id: string; email: string | null } | null
+  needsEmailConfirmation: boolean
+}
 
-  if (normalized.includes('invalid login credentials')) {
-    return 'Неверный email или пароль.'
-  }
-  if (normalized.includes('user already registered')) {
-    return 'Пользователь с таким email уже зарегистрирован.'
-  }
-  if (normalized.includes('password should be at least')) {
-    return 'Пароль должен быть не короче 6 символов.'
-  }
-  if (normalized.includes('email not confirmed')) {
-    return 'Подтвердите email перед входом.'
+async function applyBackendAuthSession(response: BackendAuthSessionResponse): Promise<void> {
+  if (!response.accessToken || !response.refreshToken) {
+    return
   }
 
-  return message
+  const { error } = await supabase.auth.setSession({
+    access_token: response.accessToken,
+    refresh_token: response.refreshToken,
+  })
+
+  if (error) {
+    throw new Error(mapAuthErrorMessage(error.message))
+  }
 }
 
 export async function signInWithEmail({ email, password }: LoginPayload) {
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+  return unwrapResult(await signInWithEmailResult({ email, password }))
+}
 
-  if (error) {
-    throw new Error(mapAuthError(error.message))
-  }
+export async function signInWithEmailResult({
+  email,
+  password,
+}: LoginPayload): Promise<Result<Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>['data']>> {
+  return toResult(async () => {
+    if (isPythonApiEnabled()) {
+      const response = await apiPublicRequest<BackendAuthSessionResponse>('/auth/signin', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      })
+      await applyBackendAuthSession(response)
 
-  return data
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      if (!session) {
+        throw new Error('Не удалось сохранить сессию после входа.')
+      }
+
+      return { session, user: session.user }
+    }
+
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+
+    if (error) {
+      throw new Error(mapAuthErrorMessage(error.message))
+    }
+
+    return data
+  }, 'Не удалось выполнить вход.')
 }
 
 function getOAuthRedirectTo() {
@@ -59,18 +92,26 @@ function getOAuthRedirectTo() {
 }
 
 export async function signInWithGoogle() {
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: 'google',
-    options: {
-      redirectTo: getOAuthRedirectTo(),
-    },
-  })
+  return unwrapResult(await signInWithGoogleResult())
+}
 
-  if (error) {
-    throw new Error(mapAuthError(error.message))
-  }
+export async function signInWithGoogleResult(): Promise<
+  Result<Awaited<ReturnType<typeof supabase.auth.signInWithOAuth>>['data']>
+> {
+  return toResult(async () => {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: getOAuthRedirectTo(),
+      },
+    })
 
-  return data
+    if (error) {
+      throw new Error(mapAuthErrorMessage(error.message))
+    }
+
+    return data
+  }, 'Не удалось войти через Google.')
 }
 
 export async function signUpWithProfile({
@@ -79,6 +120,30 @@ export async function signUpWithProfile({
   displayName,
   role,
 }: RegisterPayload) {
+  if (isPythonApiEnabled()) {
+    const response = await apiPublicRequest<BackendAuthSessionResponse>('/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify({
+        email,
+        password,
+        displayName,
+        role,
+      }),
+    })
+
+    await applyBackendAuthSession(response)
+
+    return {
+      user: response.user
+        ? {
+            id: response.user.id,
+            email: response.user.email ?? undefined,
+          }
+        : null,
+      needsEmailConfirmation: response.needsEmailConfirmation,
+    }
+  }
+
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
@@ -91,7 +156,7 @@ export async function signUpWithProfile({
   })
 
   if (error) {
-    throw new Error(mapAuthError(error.message))
+    throw new Error(mapAuthErrorMessage(error.message))
   }
 
   if (data.session && data.user) {
@@ -164,10 +229,7 @@ async function fetchProfileRow(userId: string): Promise<ProfileRow | null> {
 }
 
 export async function getCurrentProfile(): Promise<ProfileRow | null> {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
+  const user = await getAuthUserOrNull()
   if (!user) return null
 
   return fetchProfileRow(user.id)
@@ -194,13 +256,7 @@ export function isProfileComplete(profile: ProfileRow | null, role?: string | nu
 }
 
 export async function updateProfile({ displayName, role }: UpdateProfilePayload) {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    throw new Error('Пользователь не авторизован.')
-  }
+  const user = await getAuthUserOrThrow()
 
   if (!isRoleSelected(role)) {
     throw new Error('Выберите роль в команде.')
@@ -210,9 +266,7 @@ export async function updateProfile({ displayName, role }: UpdateProfilePayload)
   const resolvedDisplayName =
     displayName?.trim() ||
     existingProfile?.display_name ||
-    user.user_metadata?.display_name ||
-    user.email?.split('@')[0] ||
-    'Пользователь'
+    getDefaultDisplayNameFromUser(user)
 
   const profilePayload = {
     id: user.id,
@@ -243,11 +297,20 @@ export async function updateProfile({ displayName, role }: UpdateProfilePayload)
 }
 
 export async function getAuthAccount(): Promise<AuthAccount | null> {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
+  const user = await getAuthUserOrNull()
   if (!user) return null
+
+  if (isPythonApiEnabled()) {
+    try {
+      const account = await apiRequest<AuthAccount>('/auth/me')
+      return {
+        ...account,
+        email: account.email || user.email || '',
+      }
+    } catch {
+      return null
+    }
+  }
 
   let profile: ProfileRow | null = null
   try {
@@ -264,9 +327,7 @@ export async function getAuthAccount(): Promise<AuthAccount | null> {
     email: user.email ?? '',
     displayName:
       profile?.display_name ??
-      user.user_metadata?.display_name ??
-      user.email?.split('@')[0] ??
-      'Пользователь',
+      getDefaultDisplayNameFromUser(user),
     role,
     profileComplete: isProfileComplete(profile, role),
     avatarPreset: profile?.avatar_preset ?? null,
@@ -275,10 +336,16 @@ export async function getAuthAccount(): Promise<AuthAccount | null> {
 }
 
 export async function signOut() {
-  const { error } = await supabase.auth.signOut()
-  if (error) {
-    throw new Error(error.message)
-  }
+  await unwrapResult(await signOutResult())
+}
+
+export async function signOutResult(): Promise<Result<void>> {
+  return toResult(async () => {
+    const { error } = await supabase.auth.signOut()
+    if (error) {
+      throw new Error(error.message)
+    }
+  }, 'Не удалось выйти из аккаунта.')
 }
 
 export function userHasEmailPasswordLogin(
@@ -288,13 +355,19 @@ export function userHasEmailPasswordLogin(
 }
 
 export async function updateUserPassword(password: string): Promise<void> {
-  if (password.length < 6) {
-    throw new Error('Пароль должен быть не короче 6 символов.')
-  }
+  await unwrapResult(await updateUserPasswordResult(password))
+}
 
-  const { error } = await supabase.auth.updateUser({ password })
+export async function updateUserPasswordResult(password: string): Promise<Result<void>> {
+  return toResult(async () => {
+    if (password.length < 6) {
+      throw new Error('Пароль должен быть не короче 6 символов.')
+    }
 
-  if (error) {
-    throw new Error(mapAuthError(error.message))
-  }
+    const { error } = await supabase.auth.updateUser({ password })
+
+    if (error) {
+      throw new Error(mapAuthErrorMessage(error.message))
+    }
+  }, 'Не удалось обновить пароль.')
 }

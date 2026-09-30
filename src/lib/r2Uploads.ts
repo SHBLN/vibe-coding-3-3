@@ -1,4 +1,6 @@
 import { supabase } from './supabase'
+import { mapR2FunctionErrorMessage } from './errorMapping'
+import { toResult, type Result, unwrapResult } from './result'
 
 export const MAX_ATTACHMENT_SIZE_BYTES = 10 * 1024 * 1024
 
@@ -29,37 +31,6 @@ export type AttachmentMeta = {
   name: string
   size: number
   mime: string
-}
-
-async function getFunctionErrorMessage(error: unknown): Promise<string> {
-  if (error && typeof error === 'object' && 'context' in error) {
-    const context = (error as { context?: Response }).context
-    if (context instanceof Response) {
-      try {
-        const body = (await context.clone().json()) as {
-          error?: string
-          missingKeys?: string[]
-        }
-
-        if (body.missingKeys?.length) {
-          return `Хранилище не настроено. Добавьте secrets в Supabase: ${body.missingKeys.join(', ')}`
-        }
-
-        if (body.error) return body.error
-      } catch {
-        // ignore JSON parse errors
-      }
-    }
-  }
-
-  if (error instanceof Error && error.message) {
-    if (error.message.includes('non-2xx')) {
-      return 'Edge Function вернула ошибку. Проверьте R2 secrets в Supabase.'
-    }
-    return error.message
-  }
-
-  return 'Не удалось получить ссылку для загрузки.'
 }
 
 function resolveContentType(file: File): string {
@@ -103,27 +74,37 @@ export async function requestPresignedUpload(
   taskId: string,
   file: File,
 ): Promise<PresignedUploadResponse> {
-  validateAttachmentFile(file)
-  const contentType = resolveContentType(file)
+  const result = await requestPresignedUploadResult(taskId, file)
+  return unwrapResult(result)
+}
 
-  const { data, error } = await supabase.functions.invoke<PresignedUploadResponse>('r2-upload-url', {
-    body: {
-      taskId,
-      fileName: file.name,
-      contentType,
-      fileSize: file.size,
-    },
-  })
+export async function requestPresignedUploadResult(
+  taskId: string,
+  file: File,
+): Promise<Result<PresignedUploadResponse>> {
+  return toResult(async () => {
+    validateAttachmentFile(file)
+    const contentType = resolveContentType(file)
 
-  if (error) {
-    throw new Error(await getFunctionErrorMessage(error))
-  }
+    const { data, error } = await supabase.functions.invoke<PresignedUploadResponse>('r2-upload-url', {
+      body: {
+        taskId,
+        fileName: file.name,
+        contentType,
+        fileSize: file.size,
+      },
+    })
 
-  if (!data?.uploadUrl || !data.publicUrl) {
-    throw new Error('Сервер вернул некорректный ответ для загрузки.')
-  }
+    if (error) {
+      throw new Error(await mapR2FunctionErrorMessage(error))
+    }
 
-  return data
+    if (!data?.uploadUrl || !data.publicUrl) {
+      throw new Error('Сервер вернул некорректный ответ для загрузки.')
+    }
+
+    return data
+  }, 'Не удалось получить ссылку для загрузки.')
 }
 
 const MAX_AVATAR_SIZE_BYTES = 2 * 1024 * 1024
@@ -146,62 +127,76 @@ export function validateAvatarFile(file: File): void {
 }
 
 export async function uploadProfileAvatar(file: File): Promise<string> {
-  validateAvatarFile(file)
-  const contentType = resolveContentType(file)
+  const result = await uploadProfileAvatarResult(file)
+  return unwrapResult(result)
+}
 
-  const { data, error } = await supabase.functions.invoke<PresignedUploadResponse>('r2-upload-url', {
-    body: {
-      purpose: 'profile_avatar',
-      fileName: file.name,
-      contentType,
-      fileSize: file.size,
-    },
-  })
+export async function uploadProfileAvatarResult(file: File): Promise<Result<string>> {
+  return toResult(async () => {
+    validateAvatarFile(file)
+    const contentType = resolveContentType(file)
 
-  if (error) {
-    throw new Error(await getFunctionErrorMessage(error))
-  }
+    const { data, error } = await supabase.functions.invoke<PresignedUploadResponse>('r2-upload-url', {
+      body: {
+        purpose: 'profile_avatar',
+        fileName: file.name,
+        contentType,
+        fileSize: file.size,
+      },
+    })
 
-  if (!data?.uploadUrl || !data.publicUrl) {
-    throw new Error('Сервер вернул некорректный ответ для загрузки.')
-  }
+    if (error) {
+      throw new Error(await mapR2FunctionErrorMessage(error))
+    }
 
-  const uploadResponse = await fetch(data.uploadUrl, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': contentType,
-    },
-    body: file,
-  })
+    if (!data?.uploadUrl || !data.publicUrl) {
+      throw new Error('Сервер вернул некорректный ответ для загрузки.')
+    }
 
-  if (!uploadResponse.ok) {
-    throw new Error('Не удалось загрузить аватар.')
-  }
+    const uploadResponse = await fetch(data.uploadUrl, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': contentType,
+      },
+      body: file,
+    })
 
-  return data.publicUrl
+    if (!uploadResponse.ok) {
+      throw new Error('Не удалось загрузить аватар.')
+    }
+
+    return data.publicUrl
+  }, 'Не удалось загрузить аватар.')
 }
 
 export async function uploadFileToR2(taskId: string, file: File): Promise<AttachmentMeta> {
-  const { uploadUrl, publicUrl } = await requestPresignedUpload(taskId, file)
+  const result = await uploadFileToR2Result(taskId, file)
+  return unwrapResult(result)
+}
 
-  const contentType = resolveContentType(file)
+export async function uploadFileToR2Result(taskId: string, file: File): Promise<Result<AttachmentMeta>> {
+  return toResult(async () => {
+    const { uploadUrl, publicUrl } = await requestPresignedUpload(taskId, file)
 
-  const uploadResponse = await fetch(uploadUrl, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': contentType,
-    },
-    body: file,
-  })
+    const contentType = resolveContentType(file)
 
-  if (!uploadResponse.ok) {
-    throw new Error('Не удалось загрузить файл в хранилище.')
-  }
+    const uploadResponse = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': contentType,
+      },
+      body: file,
+    })
 
-  return {
-    url: publicUrl,
-    name: file.name,
-    size: file.size,
-    mime: file.type,
-  }
+    if (!uploadResponse.ok) {
+      throw new Error('Не удалось загрузить файл в хранилище.')
+    }
+
+    return {
+      url: publicUrl,
+      name: file.name,
+      size: file.size,
+      mime: file.type,
+    }
+  }, 'Не удалось загрузить файл в хранилище.')
 }

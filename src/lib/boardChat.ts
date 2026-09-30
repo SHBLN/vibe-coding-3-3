@@ -1,5 +1,7 @@
 import type { Tables } from './database.types'
 import { getProfileInitials } from './profiles'
+import { getAuthUserOrThrow } from './authSession'
+import { toResult, type Result, unwrapResult } from './result'
 import { supabase } from './supabase'
 import {
   BACKLOG_STATUS_KEY,
@@ -95,14 +97,7 @@ function mapMessageRow(row: BoardMessageWithAuthor): BoardMessage {
 }
 
 async function requireUserId(): Promise<string> {
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser()
-
-  if (error) throw new Error(error.message)
-  if (!user) throw new Error('Пользователь не авторизован.')
-
+  const user = await getAuthUserOrThrow()
   return user.id
 }
 
@@ -241,39 +236,51 @@ export async function runBoardMessageAiSplit(payload: {
   description?: string
   dueAt?: string | null
 }): Promise<AiSplitResult> {
-  const { data, error } = await supabase.functions.invoke('anymodel-chat', {
-    body: {
-      boardId: payload.boardId,
-      title: payload.title,
-      description: payload.description,
-      dueAt: payload.dueAt ?? null,
-    },
-  })
+  const result = await runBoardMessageAiSplitResult(payload)
+  return unwrapResult(result)
+}
 
-  if (error) {
-    throw new Error(await getFunctionErrorMessage(error))
-  }
+export async function runBoardMessageAiSplitResult(payload: {
+  boardId: string
+  title: string
+  description?: string
+  dueAt?: string | null
+}): Promise<Result<AiSplitResult>> {
+  return toResult(async () => {
+    const { data, error } = await supabase.functions.invoke('anymodel-chat', {
+      body: {
+        boardId: payload.boardId,
+        title: payload.title,
+        description: payload.description,
+        dueAt: payload.dueAt ?? null,
+      },
+    })
 
-  const result = data as Partial<AiSplitResult> & { error?: string }
-  if (!result || result.error) {
-    throw new Error(result?.error ?? 'AI вернул пустой ответ.')
-  }
+    if (error) {
+      throw new Error(await getFunctionErrorMessage(error))
+    }
 
-  if (!result.epic?.id || !Array.isArray(result.boardTasks) || !result.backlogColumnId) {
-    throw new Error('AI вернул неполный результат.')
-  }
+    const result = data as Partial<AiSplitResult> & { error?: string }
+    if (!result || result.error) {
+      throw new Error(result?.error ?? 'AI вернул пустой ответ.')
+    }
 
-  return {
-    epic: {
-      id: result.epic.id,
-      title: result.epic.title,
-    },
-    boardTasks: result.boardTasks,
-    backlogColumnId: result.backlogColumnId,
-    backlogStatus: result.backlogStatus ?? BACKLOG_STATUS_KEY,
-    warnings: result.warnings ?? [],
-    unmatchedRoles: result.unmatchedRoles ?? [],
-  }
+    if (!result.epic?.id || !Array.isArray(result.boardTasks) || !result.backlogColumnId) {
+      throw new Error('AI вернул неполный результат.')
+    }
+
+    return {
+      epic: {
+        id: result.epic.id,
+        title: result.epic.title,
+      },
+      boardTasks: result.boardTasks,
+      backlogColumnId: result.backlogColumnId,
+      backlogStatus: result.backlogStatus ?? BACKLOG_STATUS_KEY,
+      warnings: result.warnings ?? [],
+      unmatchedRoles: result.unmatchedRoles ?? [],
+    }
+  }, 'Не удалось выполнить AI-разбиение задачи.')
 }
 
 export function mapAiSplitToBoardTasks(result: AiSplitResult): BoardTask[] {

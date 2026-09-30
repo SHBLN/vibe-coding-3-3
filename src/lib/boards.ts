@@ -1,4 +1,7 @@
 import type { Json, Tables } from './database.types'
+import { apiRequest, isPythonApiEnabled } from './apiClient'
+import { getAuthUserOrThrow } from './authSession'
+import { toResult, unwrapResult, type Result } from './result'
 import { supabase } from './supabase'
 
 export type BoardRow = Tables<'boards'>
@@ -91,111 +94,161 @@ function mapBoardInsertError(rawMessage: string): Error {
 }
 
 async function requireUserId(): Promise<string> {
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser()
-
-  if (error) throw new Error(error.message)
-  if (!user) throw new Error('Пользователь не авторизован.')
-
+  const user = await getAuthUserOrThrow()
   return user.id
 }
 
 export async function listBoards(): Promise<Board[]> {
-  const { data: boardRows, error: boardsError } = await supabase
-    .from('boards')
-    .select('id, owner_id, title, description, created_at, updated_at')
-    .order('updated_at', { ascending: false })
+  return unwrapResult(await listBoardsResult())
+}
 
-  if (boardsError) throw new Error(boardsError.message)
-  if (!boardRows || boardRows.length === 0) return []
+export async function listBoardsResult(): Promise<Result<Board[]>> {
+  return toResult(async () => {
+    if (isPythonApiEnabled()) {
+      return apiRequest<Board[]>('/boards')
+    }
 
-  const boardIds = boardRows.map((board) => board.id)
+    const { data: boardRows, error: boardsError } = await supabase
+      .from('boards')
+      .select('id, owner_id, title, description, created_at, updated_at')
+      .order('updated_at', { ascending: false })
 
-  const { data: columnRows, error: columnsError } = await supabase
-    .from('board_columns')
-    .select('id, board_id, title, position, status_key, cards, created_at, updated_at')
-    .in('board_id', boardIds)
-    .order('position', { ascending: true })
+    if (boardsError) throw new Error(boardsError.message)
+    if (!boardRows || boardRows.length === 0) return []
 
-  if (columnsError) throw new Error(columnsError.message)
+    const boardIds = boardRows.map((board) => board.id)
 
-  const columnsByBoardId = new Map<string, BoardColumnRow[]>()
-  for (const column of columnRows ?? []) {
-    const existing = columnsByBoardId.get(column.board_id) ?? []
-    existing.push(column)
-    columnsByBoardId.set(column.board_id, existing)
-  }
+    const { data: columnRows, error: columnsError } = await supabase
+      .from('board_columns')
+      .select('id, board_id, title, position, status_key, cards, created_at, updated_at')
+      .in('board_id', boardIds)
+      .order('position', { ascending: true })
 
-  return boardRows.map((board) => mapBoardRow(board, columnsByBoardId.get(board.id) ?? []))
+    if (columnsError) throw new Error(columnsError.message)
+
+    const columnsByBoardId = new Map<string, BoardColumnRow[]>()
+    for (const column of columnRows ?? []) {
+      const existing = columnsByBoardId.get(column.board_id) ?? []
+      existing.push(column)
+      columnsByBoardId.set(column.board_id, existing)
+    }
+
+    return boardRows.map((board) => mapBoardRow(board, columnsByBoardId.get(board.id) ?? []))
+  }, 'Не удалось загрузить доски.')
 }
 
 export async function createBoard(payload: {
   title: string
   description: string
 }): Promise<Board> {
-  const ownerId = await requireUserId()
+  return unwrapResult(await createBoardResult(payload))
+}
 
-  const { data: boardRow, error: boardError } = await supabase
-    .from('boards')
-    .insert({
-      owner_id: ownerId,
-      title: payload.title,
-      description: payload.description,
-    })
-    .select('id, owner_id, title, description, created_at, updated_at')
-    .single()
+export async function createBoardResult(payload: {
+  title: string
+  description: string
+}): Promise<Result<Board>> {
+  return toResult(async () => {
+    if (isPythonApiEnabled()) {
+      try {
+        return await apiRequest<Board>('/boards', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        })
+      } catch (error) {
+        throw mapBoardInsertError(error instanceof Error ? error.message : String(error))
+      }
+    }
 
-  if (boardError) throw mapBoardInsertError(boardError.message)
+    const ownerId = await requireUserId()
 
-  const columnInserts = DEFAULT_COLUMNS.map((column, index) => ({
-    board_id: boardRow.id,
-    title: column.title,
-    status_key: column.statusKey,
-    position: index,
-    cards: [] as Json,
-  }))
+    const { data: boardRow, error: boardError } = await supabase
+      .from('boards')
+      .insert({
+        owner_id: ownerId,
+        title: payload.title,
+        description: payload.description,
+      })
+      .select('id, owner_id, title, description, created_at, updated_at')
+      .single()
 
-  const { data: columnRows, error: columnsError } = await supabase
-    .from('board_columns')
-    .insert(columnInserts)
-    .select('id, board_id, title, position, status_key, cards, created_at, updated_at')
+    if (boardError) throw mapBoardInsertError(boardError.message)
 
-  if (columnsError) throw new Error(columnsError.message)
+    const columnInserts = DEFAULT_COLUMNS.map((column, index) => ({
+      board_id: boardRow.id,
+      title: column.title,
+      status_key: column.statusKey,
+      position: index,
+      cards: [] as Json,
+    }))
 
-  return mapBoardRow(boardRow, columnRows ?? [])
+    const { data: columnRows, error: columnsError } = await supabase
+      .from('board_columns')
+      .insert(columnInserts)
+      .select('id, board_id, title, position, status_key, cards, created_at, updated_at')
+
+    if (columnsError) throw new Error(columnsError.message)
+
+    return mapBoardRow(boardRow, columnRows ?? [])
+  }, 'Не удалось создать доску.')
 }
 
 export async function updateBoard(
   boardId: string,
   payload: { title: string; description: string },
 ): Promise<Board> {
-  const { data: boardRow, error: boardError } = await supabase
-    .from('boards')
-    .update({
-      title: payload.title,
-      description: payload.description,
-    })
-    .eq('id', boardId)
-    .select('id, owner_id, title, description, created_at, updated_at')
-    .single()
+  return unwrapResult(await updateBoardResult(boardId, payload))
+}
 
-  if (boardError) throw new Error(boardError.message)
+export async function updateBoardResult(
+  boardId: string,
+  payload: { title: string; description: string },
+): Promise<Result<Board>> {
+  return toResult(async () => {
+    if (isPythonApiEnabled()) {
+      return apiRequest<Board>(`/boards/${boardId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      })
+    }
 
-  const { data: columnRows, error: columnsError } = await supabase
-    .from('board_columns')
-    .select('id, board_id, title, position, status_key, cards, created_at, updated_at')
-    .eq('board_id', boardId)
-    .order('position', { ascending: true })
+    const { data: boardRow, error: boardError } = await supabase
+      .from('boards')
+      .update({
+        title: payload.title,
+        description: payload.description,
+      })
+      .eq('id', boardId)
+      .select('id, owner_id, title, description, created_at, updated_at')
+      .single()
 
-  if (columnsError) throw new Error(columnsError.message)
+    if (boardError) throw new Error(boardError.message)
 
-  return mapBoardRow(boardRow, columnRows ?? [])
+    const { data: columnRows, error: columnsError } = await supabase
+      .from('board_columns')
+      .select('id, board_id, title, position, status_key, cards, created_at, updated_at')
+      .eq('board_id', boardId)
+      .order('position', { ascending: true })
+
+    if (columnsError) throw new Error(columnsError.message)
+
+    return mapBoardRow(boardRow, columnRows ?? [])
+  }, 'Не удалось обновить доску.')
 }
 
 export async function deleteBoard(boardId: string): Promise<void> {
-  const { error } = await supabase.from('boards').delete().eq('id', boardId)
+  await unwrapResult(await deleteBoardResult(boardId))
+}
 
-  if (error) throw new Error(error.message)
+export async function deleteBoardResult(boardId: string): Promise<Result<void>> {
+  return toResult(async () => {
+    if (isPythonApiEnabled()) {
+      await apiRequest<void>(`/boards/${boardId}`, { method: 'DELETE' })
+      return
+    }
+
+    const { error } = await supabase.from('boards').delete().eq('id', boardId)
+
+    if (error) throw new Error(error.message)
+  }, 'Не удалось удалить доску.')
 }

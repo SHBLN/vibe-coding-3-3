@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { toResult, type Result, unwrapResult } from './result'
 
 export type KnowledgeQuerySource = {
   segmentId: string
@@ -21,25 +22,32 @@ export type KnowledgeQueryError = {
   providerStatus?: number
 }
 
-export async function queryKnowledgeBase(query: string): Promise<KnowledgeQuerySuccess> {
+export async function queryKnowledgeBaseResult(query: string): Promise<Result<KnowledgeQuerySuccess>> {
   const trimmed = query.trim()
   if (!trimmed) {
-    throw new Error('query is required')
+    return { ok: false, error: 'query is required' }
   }
 
-  const { data, error } = await supabase.functions.invoke<
-    KnowledgeQuerySuccess | KnowledgeQueryError
-  >('dify-knowledge-query', {
-    body: { query: trimmed },
-  })
+  return toResult(async () => {
+    const { data, error } = await supabase.functions.invoke<
+      KnowledgeQuerySuccess | KnowledgeQueryError
+    >('dify-knowledge-query', {
+      body: { query: trimmed },
+    })
 
-  if (error) {
-    throw new Error(error.message)
-  }
+    if (error) {
+      throw new Error(error.message)
+    }
 
-  if (!data || 'error' in data) {
-    throw new Error(data?.error ?? 'Knowledge query failed')
-  }
+    if (!data || 'error' in data) {
+      throw new Error(data?.error ?? 'Knowledge query failed')
+    }
 
-  return data
+    return data
+  }, 'Knowledge query failed')
+}
+
+export async function queryKnowledgeBase(query: string): Promise<KnowledgeQuerySuccess> {
+  const result = await queryKnowledgeBaseResult(query)
+  return unwrapResult(result)
 }

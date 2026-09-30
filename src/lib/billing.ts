@@ -1,4 +1,5 @@
 import type { Tables } from './database.types'
+import { toResult, unwrapResult, type Result } from './result'
 import { supabase } from './supabase'
 
 export type BillingPlanId = 'light' | 'pro' | 'enterprise'
@@ -41,95 +42,135 @@ async function getFunctionErrorMessage(error: unknown): Promise<string> {
 }
 
 export async function startCheckout(planId: BillingPlanId): Promise<void> {
-  const { data, error } = await supabase.functions.invoke<{ url?: string; error?: string }>(
-    'stripe-create-checkout',
-    { body: { planId } },
-  )
+  await unwrapResult(await startCheckoutResult(planId))
+}
 
-  if (error) {
-    throw new Error(await getFunctionErrorMessage(error))
-  }
+export async function startCheckoutResult(planId: BillingPlanId): Promise<Result<void>> {
+  return toResult(async () => {
+    const { data, error } = await supabase.functions.invoke<{ url?: string; error?: string }>(
+      'stripe-create-checkout',
+      { body: { planId } },
+    )
 
-  if (!data?.url) {
-    throw new Error(data?.error ?? 'Сервер не вернул ссылку на оплату.')
-  }
+    if (error) {
+      throw new Error(await getFunctionErrorMessage(error))
+    }
 
-  window.location.assign(data.url)
+    if (!data?.url) {
+      throw new Error(data?.error ?? 'Сервер не вернул ссылку на оплату.')
+    }
+
+    window.location.assign(data.url)
+  }, 'Не удалось начать оплату.')
 }
 
 export async function fetchBillingPayments(): Promise<BillingPaymentRow[]> {
-  const { data, error } = await supabase
-    .from('billing_payments')
-    .select(
-      'id, user_id, stripe_invoice_id, stripe_payment_intent_id, plan_id, amount_cents, currency, status, paid_at, created_at',
-    )
-    .order('paid_at', { ascending: false, nullsFirst: false })
-    .order('created_at', { ascending: false })
+  return unwrapResult(await fetchBillingPaymentsResult())
+}
 
-  if (error) throw error
-  return data ?? []
+export async function fetchBillingPaymentsResult(): Promise<Result<BillingPaymentRow[]>> {
+  return toResult(async () => {
+    const { data, error } = await supabase
+      .from('billing_payments')
+      .select(
+        'id, user_id, stripe_invoice_id, stripe_payment_intent_id, plan_id, amount_cents, currency, status, paid_at, created_at',
+      )
+      .order('paid_at', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: false })
+
+    if (error) throw error
+    return data ?? []
+  }, 'Не удалось загрузить платежи.')
 }
 
 export async function fetchCurrentSubscription(): Promise<BillingSubscriptionRow | null> {
-  const { data, error } = await supabase
-    .from('billing_subscriptions')
-    .select(
-      'user_id, stripe_subscription_id, plan_id, status, current_period_end, cancel_at_period_end, updated_at',
-    )
-    .maybeSingle()
+  return unwrapResult(await fetchCurrentSubscriptionResult())
+}
 
-  if (error) throw error
-  return data
+export async function fetchCurrentSubscriptionResult(): Promise<Result<BillingSubscriptionRow | null>> {
+  return toResult(async () => {
+    const { data, error } = await supabase
+      .from('billing_subscriptions')
+      .select(
+        'user_id, stripe_subscription_id, plan_id, status, current_period_end, cancel_at_period_end, updated_at',
+      )
+      .maybeSingle()
+
+    if (error) throw error
+    return data
+  }, 'Не удалось загрузить подписку.')
 }
 
 export async function cancelSubscriptionAtPeriodEnd(): Promise<{
   currentPeriodEnd: string | null
   alreadyScheduled: boolean
 }> {
-  const { data, error } = await supabase.functions.invoke<{
-    ok?: boolean
-    currentPeriodEnd?: string | null
-    alreadyScheduled?: boolean
-    error?: string
-  }>('stripe-cancel-subscription', { body: {} })
+  return unwrapResult(await cancelSubscriptionAtPeriodEndResult())
+}
 
-  if (error) {
-    throw new Error(await getFunctionErrorMessage(error))
-  }
+export async function cancelSubscriptionAtPeriodEndResult(): Promise<
+  Result<{
+    currentPeriodEnd: string | null
+    alreadyScheduled: boolean
+  }>
+> {
+  return toResult(async () => {
+    const { data, error } = await supabase.functions.invoke<{
+      ok?: boolean
+      currentPeriodEnd?: string | null
+      alreadyScheduled?: boolean
+      error?: string
+    }>('stripe-cancel-subscription', { body: {} })
 
-  if (!data?.ok) {
-    throw new Error(data?.error ?? 'Не удалось отменить подписку.')
-  }
+    if (error) {
+      throw new Error(await getFunctionErrorMessage(error))
+    }
 
-  return {
-    currentPeriodEnd: data.currentPeriodEnd ?? null,
-    alreadyScheduled: Boolean(data.alreadyScheduled),
-  }
+    if (!data?.ok) {
+      throw new Error(data?.error ?? 'Не удалось отменить подписку.')
+    }
+
+    return {
+      currentPeriodEnd: data.currentPeriodEnd ?? null,
+      alreadyScheduled: Boolean(data.alreadyScheduled),
+    }
+  }, 'Не удалось отменить подписку.')
 }
 
 export async function upgradeSubscription(planId: BillingPlanId): Promise<{
   planId: BillingPlanId
   currentPeriodEnd: string | null
 }> {
-  const { data, error } = await supabase.functions.invoke<{
-    ok?: boolean
-    planId?: BillingPlanId
-    currentPeriodEnd?: string | null
-    error?: string
-  }>('stripe-upgrade-subscription', { body: { planId } })
+  return unwrapResult(await upgradeSubscriptionResult(planId))
+}
 
-  if (error) {
-    throw new Error(await getFunctionErrorMessage(error))
-  }
+export async function upgradeSubscriptionResult(planId: BillingPlanId): Promise<
+  Result<{
+    planId: BillingPlanId
+    currentPeriodEnd: string | null
+  }>
+> {
+  return toResult(async () => {
+    const { data, error } = await supabase.functions.invoke<{
+      ok?: boolean
+      planId?: BillingPlanId
+      currentPeriodEnd?: string | null
+      error?: string
+    }>('stripe-upgrade-subscription', { body: { planId } })
 
-  if (!data?.ok || !data.planId) {
-    throw new Error(data?.error ?? 'Не удалось повысить тариф.')
-  }
+    if (error) {
+      throw new Error(await getFunctionErrorMessage(error))
+    }
 
-  return {
-    planId: data.planId,
-    currentPeriodEnd: data.currentPeriodEnd ?? null,
-  }
+    if (!data?.ok || !data.planId) {
+      throw new Error(data?.error ?? 'Не удалось повысить тариф.')
+    }
+
+    return {
+      planId: data.planId,
+      currentPeriodEnd: data.currentPeriodEnd ?? null,
+    }
+  }, 'Не удалось повысить тариф.')
 }
 
 export function formatPlanLabel(planId: string | null | undefined): string {

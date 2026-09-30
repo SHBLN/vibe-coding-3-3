@@ -1,4 +1,5 @@
 import { BoardLimitError } from './boards'
+import { toResult, unwrapResult, type Result } from './result'
 import { supabase } from './supabase'
 
 function mapTeamMemberError(rawMessage: string): Error {
@@ -29,67 +30,85 @@ function mapTeamMemberError(rawMessage: string): Error {
 }
 
 export async function fetchBoardMemberIds(boardId: string): Promise<string[]> {
-  const { data, error } = await supabase
-    .from('board_members')
-    .select('profile_id')
-    .eq('board_id', boardId)
+  return unwrapResult(await fetchBoardMemberIdsResult(boardId))
+}
 
-  if (error) throw new Error(error.message)
-  return (data ?? []).map((row) => row.profile_id)
+export async function fetchBoardMemberIdsResult(boardId: string): Promise<Result<string[]>> {
+  return toResult(async () => {
+    const { data, error } = await supabase
+      .from('board_members')
+      .select('profile_id')
+      .eq('board_id', boardId)
+
+    if (error) throw new Error(error.message)
+    return (data ?? []).map((row) => row.profile_id)
+  }, 'Не удалось загрузить участников доски.')
 }
 
 export async function fetchOwnerDistinctTeamMemberIds(): Promise<string[]> {
-  const { data: boards, error: boardsError } = await supabase.from('boards').select('id')
+  return unwrapResult(await fetchOwnerDistinctTeamMemberIdsResult())
+}
 
-  if (boardsError) throw new Error(boardsError.message)
-  if (!boards || boards.length === 0) return []
+export async function fetchOwnerDistinctTeamMemberIdsResult(): Promise<Result<string[]>> {
+  return toResult(async () => {
+    const { data: boards, error: boardsError } = await supabase.from('boards').select('id')
 
-  const boardIds = boards.map((board) => board.id)
+    if (boardsError) throw new Error(boardsError.message)
+    if (!boards || boards.length === 0) return []
 
-  const { data, error } = await supabase
-    .from('board_members')
-    .select('profile_id')
-    .in('board_id', boardIds)
+    const boardIds = boards.map((board) => board.id)
 
-  if (error) throw new Error(error.message)
+    const { data, error } = await supabase
+      .from('board_members')
+      .select('profile_id')
+      .in('board_id', boardIds)
 
-  return [...new Set((data ?? []).map((row) => row.profile_id))]
+    if (error) throw new Error(error.message)
+
+    return [...new Set((data ?? []).map((row) => row.profile_id))]
+  }, 'Не удалось загрузить участников команды.')
 }
 
 export async function saveBoardMembers(boardId: string, profileIds: string[]): Promise<void> {
-  const uniqueIds = [...new Set(profileIds)]
+  await unwrapResult(await saveBoardMembersResult(boardId, profileIds))
+}
 
-  const { data: existingRows, error: existingError } = await supabase
-    .from('board_members')
-    .select('profile_id')
-    .eq('board_id', boardId)
+export async function saveBoardMembersResult(boardId: string, profileIds: string[]): Promise<Result<void>> {
+  return toResult(async () => {
+    const uniqueIds = [...new Set(profileIds)]
 
-  if (existingError) throw mapTeamMemberError(existingError.message)
-
-  const existingIds = new Set((existingRows ?? []).map((row) => row.profile_id))
-  const targetIds = new Set(uniqueIds)
-
-  const toRemove = [...existingIds].filter((id) => !targetIds.has(id))
-  const toAdd = [...targetIds].filter((id) => !existingIds.has(id))
-
-  if (toRemove.length > 0) {
-    const { error: deleteError } = await supabase
+    const { data: existingRows, error: existingError } = await supabase
       .from('board_members')
-      .delete()
+      .select('profile_id')
       .eq('board_id', boardId)
-      .in('profile_id', toRemove)
 
-    if (deleteError) throw mapTeamMemberError(deleteError.message)
-  }
+    if (existingError) throw mapTeamMemberError(existingError.message)
 
-  if (toAdd.length === 0) return
+    const existingIds = new Set((existingRows ?? []).map((row) => row.profile_id))
+    const targetIds = new Set(uniqueIds)
 
-  const { error: insertError } = await supabase.from('board_members').insert(
-    toAdd.map((profileId) => ({
-      board_id: boardId,
-      profile_id: profileId,
-    })),
-  )
+    const toRemove = [...existingIds].filter((id) => !targetIds.has(id))
+    const toAdd = [...targetIds].filter((id) => !existingIds.has(id))
 
-  if (insertError) throw mapTeamMemberError(insertError.message)
+    if (toRemove.length > 0) {
+      const { error: deleteError } = await supabase
+        .from('board_members')
+        .delete()
+        .eq('board_id', boardId)
+        .in('profile_id', toRemove)
+
+      if (deleteError) throw mapTeamMemberError(deleteError.message)
+    }
+
+    if (toAdd.length === 0) return
+
+    const { error: insertError } = await supabase.from('board_members').insert(
+      toAdd.map((profileId) => ({
+        board_id: boardId,
+        profile_id: profileId,
+      })),
+    )
+
+    if (insertError) throw mapTeamMemberError(insertError.message)
+  }, 'Не удалось сохранить участников доски.')
 }

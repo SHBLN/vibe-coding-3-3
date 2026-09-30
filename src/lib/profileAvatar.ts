@@ -1,5 +1,7 @@
 import type { Tables } from './database.types'
+import { getAuthUserOrThrow } from './authSession'
 import { getProfileInitials } from './profiles'
+import { toResult, unwrapResult, type Result } from './result'
 import { supabase } from './supabase'
 
 export const AVATAR_PRESETS = [
@@ -52,70 +54,70 @@ export function resolveAvatarPresetClass(presetId: string | null | undefined): s
 }
 
 export async function getProfileAvatarFields(): Promise<ProfileAvatarFields> {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  return unwrapResult(await getProfileAvatarFieldsResult())
+}
 
-  if (!user) {
-    throw new Error('Пользователь не авторизован.')
-  }
+export async function getProfileAvatarFieldsResult(): Promise<Result<ProfileAvatarFields>> {
+  return toResult(async () => {
+    const user = await getAuthUserOrThrow()
 
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('avatar_preset, avatar_url')
-    .eq('id', user.id)
-    .maybeSingle()
-    .returns<ProfileAvatarFields>()
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('avatar_preset, avatar_url')
+      .eq('id', user.id)
+      .maybeSingle()
+      .returns<ProfileAvatarFields>()
 
-  if (error) throw new Error(error.message)
+    if (error) throw new Error(error.message)
 
-  return {
-    avatar_preset: data?.avatar_preset ?? null,
-    avatar_url: data?.avatar_url ?? null,
-  }
+    return {
+      avatar_preset: data?.avatar_preset ?? null,
+      avatar_url: data?.avatar_url ?? null,
+    }
+  }, 'Не удалось загрузить настройки аватара.')
 }
 
 export async function saveProfileAvatarPreset(presetId: AvatarPresetId): Promise<void> {
-  if (!isAvatarPresetId(presetId)) {
-    throw new Error('Неизвестный аватар.')
-  }
+  await unwrapResult(await saveProfileAvatarPresetResult(presetId))
+}
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+export async function saveProfileAvatarPresetResult(presetId: AvatarPresetId): Promise<Result<void>> {
+  return toResult(async () => {
+    if (!isAvatarPresetId(presetId)) {
+      throw new Error('Неизвестный аватар.')
+    }
 
-  if (!user) {
-    throw new Error('Пользователь не авторизован.')
-  }
+    const user = await getAuthUserOrThrow()
 
-  const { error } = await supabase
-    .from('profiles')
-    .update({ avatar_preset: presetId, avatar_url: null })
-    .eq('id', user.id)
+    const { error } = await supabase
+      .from('profiles')
+      .update({ avatar_preset: presetId, avatar_url: null })
+      .eq('id', user.id)
 
-  if (error) throw new Error(error.message)
+    if (error) throw new Error(error.message)
+  }, 'Не удалось сохранить аватар.')
 }
 
 export async function saveProfileAvatarUrl(url: string): Promise<void> {
-  const trimmed = url.trim()
-  if (!trimmed) {
-    throw new Error('URL аватара пустой.')
-  }
+  await unwrapResult(await saveProfileAvatarUrlResult(url))
+}
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+export async function saveProfileAvatarUrlResult(url: string): Promise<Result<void>> {
+  return toResult(async () => {
+    const trimmed = url.trim()
+    if (!trimmed) {
+      throw new Error('URL аватара пустой.')
+    }
 
-  if (!user) {
-    throw new Error('Пользователь не авторизован.')
-  }
+    const user = await getAuthUserOrThrow()
 
-  const { error } = await supabase
-    .from('profiles')
-    .update({ avatar_url: trimmed, avatar_preset: null })
-    .eq('id', user.id)
+    const { error } = await supabase
+      .from('profiles')
+      .update({ avatar_url: trimmed, avatar_preset: null })
+      .eq('id', user.id)
 
-  if (error) throw new Error(error.message)
+    if (error) throw new Error(error.message)
+  }, 'Не удалось сохранить аватар.')
 }
 
 export function getProfileInitialsFromName(displayName: string): string {

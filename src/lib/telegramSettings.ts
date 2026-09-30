@@ -1,4 +1,7 @@
 import type { Tables } from './database.types'
+import { getAuthUserOrThrow } from './authSession'
+import { mapTelegramErrorMessage } from './errorMapping'
+import { toResult, unwrapResult, type Result } from './result'
 import { supabase } from './supabase'
 
 type ProfileTelegramRow = Pick<Tables<'profiles'>, 'telegram_username'>
@@ -31,24 +34,13 @@ export function validateTelegramUsername(username: string): string | null {
   return null
 }
 
-function mapTelegramError(message: string): string {
-  const normalized = message.toLowerCase()
-
-  if (normalized.includes('profiles_telegram_username_unique_idx')) {
-    return 'Этот Telegram username уже привязан к другому профилю.'
-  }
-
-  return message
+export async function getTelegramUsername(): Promise<string> {
+  return unwrapResult(await getTelegramUsernameResult())
 }
 
-export async function getTelegramUsername(): Promise<string> {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    throw new Error('Пользователь не авторизован.')
-  }
+export async function getTelegramUsernameResult(): Promise<Result<string>> {
+  return toResult(async () => {
+  const user = await getAuthUserOrThrow()
 
   const { data, error } = await supabase
     .from('profiles')
@@ -62,25 +54,25 @@ export async function getTelegramUsername(): Promise<string> {
   }
 
   return data?.telegram_username ?? ''
+  }, 'Не удалось загрузить Telegram username.')
 }
 
 export async function saveTelegramUsername(username: string): Promise<void> {
-  const normalized = normalizeTelegramUsername(username)
+  await unwrapResult(await saveTelegramUsernameResult(username))
+}
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+export async function saveTelegramUsernameResult(username: string): Promise<Result<void>> {
+  return toResult(async () => {
+    const normalized = normalizeTelegramUsername(username)
+    const user = await getAuthUserOrThrow()
 
-  if (!user) {
-    throw new Error('Пользователь не авторизован.')
-  }
+    const { error } = await supabase
+      .from('profiles')
+      .update({ telegram_username: normalized })
+      .eq('id', user.id)
 
-  const { error } = await supabase
-    .from('profiles')
-    .update({ telegram_username: normalized })
-    .eq('id', user.id)
-
-  if (error) {
-    throw new Error(mapTelegramError(error.message))
-  }
+    if (error) {
+      throw new Error(mapTelegramErrorMessage(error.message))
+    }
+  }, 'Не удалось сохранить Telegram username.')
 }

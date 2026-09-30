@@ -1,4 +1,5 @@
 import type { Tables } from './database.types'
+import { toResult, unwrapResult, type Result } from './result'
 import { IT_ROLES } from './roles'
 import { supabase } from './supabase'
 
@@ -26,15 +27,21 @@ export function getProfileInitials(displayName: string): string {
 }
 
 export async function listProfiles(): Promise<AssigneeProfile[]> {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('id, display_name, role, created_at')
-    .order('display_name', { ascending: true })
-    .returns<ProfileRow[]>()
+  return unwrapResult(await listProfilesResult())
+}
 
-  if (error) throw new Error(error.message)
+export async function listProfilesResult(): Promise<Result<AssigneeProfile[]>> {
+  return toResult(async () => {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, display_name, role, created_at')
+      .order('display_name', { ascending: true })
+      .returns<ProfileRow[]>()
 
-  return (data ?? []).map(mapProfile)
+    if (error) throw new Error(error.message)
+
+    return (data ?? []).map(mapProfile)
+  }, 'Не удалось загрузить профили.')
 }
 
 export function getUniqueRoles(profiles: AssigneeProfile[]): string[] {

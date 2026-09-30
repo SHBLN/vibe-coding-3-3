@@ -2,60 +2,38 @@ from functools import lru_cache
 from typing import Any
 from uuid import UUID
 
-import httpx
+import jwt
 from fastapi import HTTPException, status
-from jose import JWTError, jwt
-from jose.backends.rsa_backend import RSAKey
+from jwt import PyJWKClient
 
 from app.config import settings
 
 
 @lru_cache(maxsize=1)
-def _fetch_jwks() -> dict[str, Any]:
-    with httpx.Client(timeout=10.0) as client:
-        response = client.get(settings.jwks_url)
-        response.raise_for_status()
-        return response.json()
-
-
-def _get_signing_key(token: str) -> RSAKey | str:
-    if settings.supabase_jwt_secret:
-        return settings.supabase_jwt_secret
-
-    header = jwt.get_unverified_header(token)
-    kid = header.get("kid")
-    jwks = _fetch_jwks()
-    keys = jwks.get("keys", [])
-    for key in keys:
-        if key.get("kid") == kid:
-            return RSAKey(key, algorithm=header.get("alg", "RS256"))
-    if keys:
-        return RSAKey(keys[0], algorithm=header.get("alg", "RS256"))
-    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="JWKS keys not found")
+def _jwks_client() -> PyJWKClient:
+    return PyJWKClient(settings.jwks_url, cache_keys=True)
 
 
 def decode_supabase_token(token: str) -> dict[str, Any]:
     try:
         options = {"verify_aud": False}
         if settings.supabase_jwt_secret:
-            payload = jwt.decode(
+            return jwt.decode(
                 token,
                 settings.supabase_jwt_secret,
                 algorithms=["HS256"],
                 options={**options, "verify_iss": False},
             )
-            return payload
 
-        key = _get_signing_key(token)
-        payload = jwt.decode(
+        signing_key = _jwks_client().get_signing_key_from_jwt(token)
+        return jwt.decode(
             token,
-            key,
-            algorithms=["HS256", "RS256"],
+            signing_key.key,
+            algorithms=["HS256", "RS256", "ES256", "ES384", "ES512"],
             issuer=settings.jwt_issuer,
             options=options,
         )
-        return payload
-    except JWTError as exc:
+    except jwt.PyJWTError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Invalid token: {exc}",

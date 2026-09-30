@@ -1,6 +1,8 @@
 import type { Json, Tables } from './database.types'
 import { fetchBoardMemberIds } from './boardMembers'
+import { apiRequest, isPythonApiEnabled } from './apiClient'
 import { getProfileInitials } from './profiles'
+import { toResult, unwrapResult, type Result } from './result'
 import { supabase } from './supabase'
 import {
   BACKLOG_STATUS_KEY,
@@ -221,126 +223,202 @@ async function seedTasksFromLegacyCards(
 }
 
 export async function fetchBoardView(boardId: string): Promise<BoardViewData | null> {
-  const { data: boardRow, error: boardError } = await supabase
-    .from('boards')
-    .select('id, title, description, updated_at')
-    .eq('id', boardId)
-    .maybeSingle()
-    .returns<Pick<BoardRow, 'id' | 'title' | 'description' | 'updated_at'>>()
+  return unwrapResult(await fetchBoardViewResult(boardId))
+}
 
-  if (boardError) throw new Error(boardError.message)
-  if (!boardRow) return null
+export async function fetchBoardViewResult(boardId: string): Promise<Result<BoardViewData | null>> {
+  return toResult(async () => {
+    if (isPythonApiEnabled()) {
+      return apiRequest<BoardViewData | null>(`/boards/${boardId}/view`)
+    }
 
-  const columnRows = await fetchColumnRows(boardId)
-  if (columnRows.length === 0) return null
+    const { data: boardRow, error: boardError } = await supabase
+      .from('boards')
+      .select('id, title, description, updated_at')
+      .eq('id', boardId)
+      .maybeSingle()
+      .returns<Pick<BoardRow, 'id' | 'title' | 'description' | 'updated_at'>>()
 
-  await seedTasksFromLegacyCards(boardId, columnRows)
+    if (boardError) throw new Error(boardError.message)
+    if (!boardRow) return null
 
-  const taskRows = await fetchTaskRows(boardId)
+    const columnRows = await fetchColumnRows(boardId)
+    if (columnRows.length === 0) return null
 
-  const memberIds = await fetchBoardMemberIds(boardId)
+    await seedTasksFromLegacyCards(boardId, columnRows)
 
-  return {
-    id: boardRow.id,
-    title: boardRow.title,
-    description: boardRow.description,
-    updatedAt: boardRow.updated_at,
-    memberIds,
-    columns: buildColumns(columnRows, taskRows),
-  }
+    const taskRows = await fetchTaskRows(boardId)
+
+    const memberIds = await fetchBoardMemberIds(boardId)
+
+    return {
+      id: boardRow.id,
+      title: boardRow.title,
+      description: boardRow.description,
+      updatedAt: boardRow.updated_at,
+      memberIds,
+      columns: buildColumns(columnRows, taskRows),
+    }
+  }, 'Не удалось загрузить доску.')
 }
 
 export async function saveBoardColumnsState(
   boardId: string,
   columns: BoardViewColumn[],
 ): Promise<void> {
-  const updates = columns.flatMap((column) =>
-    column.tasks.map((task, index) => ({
-      id: task.id,
-      column_id: column.id,
-      status: column.statusKey,
-      position: index,
-    })),
-  )
+  await unwrapResult(await saveBoardColumnsStateResult(boardId, columns))
+}
 
-  for (const update of updates) {
-    const { error } = await supabase
-      .from('tasks')
-      .update({
-        column_id: update.column_id,
-        status: update.status,
-        position: update.position,
+export async function saveBoardColumnsStateResult(
+  boardId: string,
+  columns: BoardViewColumn[],
+): Promise<Result<void>> {
+  return toResult(async () => {
+    if (isPythonApiEnabled()) {
+      await apiRequest<void>(`/boards/${boardId}/columns/state`, {
+        method: 'POST',
+        body: JSON.stringify({ columns }),
       })
-      .eq('id', update.id)
-      .eq('board_id', boardId)
+      return
+    }
 
-    if (error) throw new Error(error.message)
-  }
+    const updates = columns.flatMap((column) =>
+      column.tasks.map((task, index) => ({
+        id: task.id,
+        column_id: column.id,
+        status: column.statusKey,
+        position: index,
+      })),
+    )
+
+    for (const update of updates) {
+      const { error } = await supabase
+        .from('tasks')
+        .update({
+          column_id: update.column_id,
+          status: update.status,
+          position: update.position,
+        })
+        .eq('id', update.id)
+        .eq('board_id', boardId)
+
+      if (error) throw new Error(error.message)
+    }
+  }, 'Не удалось сохранить колонки доски.')
 }
 
 export async function reindexBoardColumns(
   boardId: string,
   orderedColumnIds: string[],
 ): Promise<void> {
-  for (let index = 0; index < orderedColumnIds.length; index += 1) {
-    const { error } = await supabase
-      .from('board_columns')
-      .update({ position: index })
-      .eq('id', orderedColumnIds[index])
-      .eq('board_id', boardId)
+  await unwrapResult(await reindexBoardColumnsResult(boardId, orderedColumnIds))
+}
 
-    if (error) throw new Error(error.message)
-  }
+export async function reindexBoardColumnsResult(
+  boardId: string,
+  orderedColumnIds: string[],
+): Promise<Result<void>> {
+  return toResult(async () => {
+    if (isPythonApiEnabled()) {
+      await apiRequest<void>(`/boards/${boardId}/columns/reindex`, {
+        method: 'POST',
+        body: JSON.stringify({ orderedColumnIds }),
+      })
+      return
+    }
+
+    for (let index = 0; index < orderedColumnIds.length; index += 1) {
+      const { error } = await supabase
+        .from('board_columns')
+        .update({ position: index })
+        .eq('id', orderedColumnIds[index])
+        .eq('board_id', boardId)
+
+      if (error) throw new Error(error.message)
+    }
+  }, 'Не удалось обновить порядок колонок.')
 }
 
 export async function createBoardColumn(
   boardId: string,
   title: string,
 ): Promise<BoardViewColumn> {
-  const trimmed = title.trim()
-  if (!trimmed) throw new Error('Название колонки обязательно.')
+  return unwrapResult(await createBoardColumnResult(boardId, title))
+}
 
-  const existingColumns = await fetchColumnRows(boardId)
-  const existingKeys = new Set(existingColumns.map((column) => column.status_key))
-  const statusKey = uniqueStatusKey(trimmed, existingKeys)
-  const nextPosition = existingColumns.length
+export async function createBoardColumnResult(
+  boardId: string,
+  title: string,
+): Promise<Result<BoardViewColumn>> {
+  return toResult(async () => {
+    const trimmed = title.trim()
+    if (!trimmed) throw new Error('Название колонки обязательно.')
 
-  const { data, error } = await supabase
-    .from('board_columns')
-    .insert({
-      board_id: boardId,
-      title: trimmed,
-      status_key: statusKey,
-      position: nextPosition,
-      cards: [] as Json,
-    })
-    .select('id, board_id, title, position, status_key, cards, created_at, updated_at')
-    .single()
-    .returns<BoardColumnRow>()
+    if (isPythonApiEnabled()) {
+      return apiRequest<BoardViewColumn>(`/boards/${boardId}/columns`, {
+        method: 'POST',
+        body: JSON.stringify({ title: trimmed }),
+      })
+    }
 
-  if (error) throw new Error(error.message)
+    const existingColumns = await fetchColumnRows(boardId)
+    const existingKeys = new Set(existingColumns.map((column) => column.status_key))
+    const statusKey = uniqueStatusKey(trimmed, existingKeys)
+    const nextPosition = existingColumns.length
 
-  return mapColumnRow(data, [])
+    const { data, error } = await supabase
+      .from('board_columns')
+      .insert({
+        board_id: boardId,
+        title: trimmed,
+        status_key: statusKey,
+        position: nextPosition,
+        cards: [] as Json,
+      })
+      .select('id, board_id, title, position, status_key, cards, created_at, updated_at')
+      .single()
+      .returns<BoardColumnRow>()
+
+    if (error) throw new Error(error.message)
+
+    return mapColumnRow(data, [])
+  }, 'Не удалось создать колонку.')
 }
 
 export async function updateBoardColumn(
   columnId: string,
   title: string,
 ): Promise<{ id: string; title: string }> {
-  const trimmed = title.trim()
-  if (!trimmed) throw new Error('Название колонки обязательно.')
+  return unwrapResult(await updateBoardColumnResult(columnId, title))
+}
 
-  const { data, error } = await supabase
-    .from('board_columns')
-    .update({ title: trimmed })
-    .eq('id', columnId)
-    .select('id, title')
-    .single()
-    .returns<{ id: string; title: string }>()
+export async function updateBoardColumnResult(
+  columnId: string,
+  title: string,
+): Promise<Result<{ id: string; title: string }>> {
+  return toResult(async () => {
+    const trimmed = title.trim()
+    if (!trimmed) throw new Error('Название колонки обязательно.')
 
-  if (error) throw new Error(error.message)
+    if (isPythonApiEnabled()) {
+      return apiRequest<{ id: string; title: string }>(`/boards/columns/${columnId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ title: trimmed }),
+      })
+    }
 
-  return data
+    const { data, error } = await supabase
+      .from('board_columns')
+      .update({ title: trimmed })
+      .eq('id', columnId)
+      .select('id, title')
+      .single()
+      .returns<{ id: string; title: string }>()
+
+    if (error) throw new Error(error.message)
+
+    return data
+  }, 'Не удалось обновить колонку.')
 }
 
 export async function deleteBoardColumn(
@@ -348,61 +426,78 @@ export async function deleteBoardColumn(
   columnId: string,
   columns: BoardViewColumn[],
 ): Promise<BoardViewColumn[]> {
-  const columnToDelete = columns.find((column) => column.id === columnId)
-  if (!columnToDelete) throw new Error('Колонка не найдена.')
-  if (columnToDelete.statusKey === BACKLOG_STATUS_KEY) {
-    throw new Error('Колонку Backlog нельзя удалить.')
-  }
+  return unwrapResult(await deleteBoardColumnResult(boardId, columnId, columns))
+}
 
-  const backlogColumn = columns.find((column) => column.statusKey === BACKLOG_STATUS_KEY)
-  if (!backlogColumn) throw new Error('Колонка Backlog не найдена.')
-
-  const backlogStartPosition = backlogColumn.tasks.length
-
-  for (let index = 0; index < columnToDelete.tasks.length; index += 1) {
-    const task = columnToDelete.tasks[index]
-    const { error } = await supabase
-      .from('tasks')
-      .update({
-        column_id: backlogColumn.id,
-        status: backlogColumn.statusKey,
-        position: backlogStartPosition + index,
+export async function deleteBoardColumnResult(
+  boardId: string,
+  columnId: string,
+  columns: BoardViewColumn[],
+): Promise<Result<BoardViewColumn[]>> {
+  return toResult(async () => {
+    if (isPythonApiEnabled()) {
+      return apiRequest<BoardViewColumn[]>(`/boards/${boardId}/columns/${columnId}/delete`, {
+        method: 'POST',
+        body: JSON.stringify({ columns }),
       })
-      .eq('id', task.id)
-      .eq('board_id', boardId)
-
-    if (error) throw new Error(error.message)
-  }
-
-  const { error: deleteError } = await supabase
-    .from('board_columns')
-    .delete()
-    .eq('id', columnId)
-    .eq('board_id', boardId)
-
-  if (deleteError) throw new Error(deleteError.message)
-
-  const remainingColumns = columns.filter((column) => column.id !== columnId)
-  await reindexBoardColumns(
-    boardId,
-    remainingColumns.map((column) => column.id),
-  )
-
-  const movedTasks = columnToDelete.tasks.map((task) => ({
-    ...task,
-    status: backlogColumn.statusKey,
-  }))
-
-  return remainingColumns.map((column) => {
-    if (column.id === backlogColumn.id) {
-      return {
-        ...column,
-        tasks: [...column.tasks, ...movedTasks],
-      }
     }
 
-    return column
-  })
+    const columnToDelete = columns.find((column) => column.id === columnId)
+    if (!columnToDelete) throw new Error('Колонка не найдена.')
+    if (columnToDelete.statusKey === BACKLOG_STATUS_KEY) {
+      throw new Error('Колонку Backlog нельзя удалить.')
+    }
+
+    const backlogColumn = columns.find((column) => column.statusKey === BACKLOG_STATUS_KEY)
+    if (!backlogColumn) throw new Error('Колонка Backlog не найдена.')
+
+    const backlogStartPosition = backlogColumn.tasks.length
+
+    for (let index = 0; index < columnToDelete.tasks.length; index += 1) {
+      const task = columnToDelete.tasks[index]
+      const { error } = await supabase
+        .from('tasks')
+        .update({
+          column_id: backlogColumn.id,
+          status: backlogColumn.statusKey,
+          position: backlogStartPosition + index,
+        })
+        .eq('id', task.id)
+        .eq('board_id', boardId)
+
+      if (error) throw new Error(error.message)
+    }
+
+    const { error: deleteError } = await supabase
+      .from('board_columns')
+      .delete()
+      .eq('id', columnId)
+      .eq('board_id', boardId)
+
+    if (deleteError) throw new Error(deleteError.message)
+
+    const remainingColumns = columns.filter((column) => column.id !== columnId)
+    await reindexBoardColumns(
+      boardId,
+      remainingColumns.map((column) => column.id),
+    )
+
+    const movedTasks = columnToDelete.tasks.map((task) => ({
+      ...task,
+      status: backlogColumn.statusKey,
+    }))
+
+    return remainingColumns.map((column) => {
+      if (column.id === backlogColumn.id) {
+        return {
+          ...column,
+          tasks: [...column.tasks, ...movedTasks],
+        }
+      }
+
+      return column
+    })
+  }, 'Не удалось удалить колонку.')
 }
 
 export type CreateTaskPayload = {
@@ -488,79 +583,121 @@ async function normalizeColumnPositions(
 }
 
 export async function createTask(payload: CreateTaskPayload): Promise<BoardTask> {
-  const {
-    boardId,
-    columnId,
-    status,
-    title,
-    priority = 'medium',
-    description = null,
-    dueAt = null,
-    assigneeIds = [],
-  } = payload
+  return unwrapResult(await createTaskResult(payload))
+}
 
-  const { count, error: countError } = await supabase
-    .from('tasks')
-    .select('id', { count: 'exact', head: true })
-    .eq('board_id', boardId)
-    .eq('column_id', columnId)
-
-  if (countError) throw new Error(countError.message)
-
-  const { data: row, error: insertError } = await supabase
-    .from('tasks')
-    .insert({
-      board_id: boardId,
-      column_id: columnId,
-      title,
+export async function createTaskResult(payload: CreateTaskPayload): Promise<Result<BoardTask>> {
+  return toResult(async () => {
+    const {
+      boardId,
+      columnId,
       status,
-      kind: 'task',
-      priority,
-      description,
-      due_at: dueAt,
-      position: count ?? 0,
-      tags: [] as Json,
-    })
-    .select('id')
-    .single()
-    .returns<{ id: string }>()
+      title,
+      priority = 'medium',
+      description = null,
+      dueAt = null,
+      assigneeIds = [],
+    } = payload
 
-  if (insertError) throw new Error(insertError.message)
+    if (isPythonApiEnabled()) {
+      return apiRequest<BoardTask>('/tasks', {
+        method: 'POST',
+        body: JSON.stringify({
+          boardId,
+          columnId,
+          status,
+          title,
+          priority,
+          description,
+          dueAt,
+          assigneeIds,
+        }),
+      })
+    }
 
-  if (assigneeIds.length > 0) {
-    await syncTaskAssignees(row.id, assigneeIds)
-  }
+    const { count, error: countError } = await supabase
+      .from('tasks')
+      .select('id', { count: 'exact', head: true })
+      .eq('board_id', boardId)
+      .eq('column_id', columnId)
 
-  return fetchTaskById(row.id, boardId)
+    if (countError) throw new Error(countError.message)
+
+    const { data: row, error: insertError } = await supabase
+      .from('tasks')
+      .insert({
+        board_id: boardId,
+        column_id: columnId,
+        title,
+        status,
+        kind: 'task',
+        priority,
+        description,
+        due_at: dueAt,
+        position: count ?? 0,
+        tags: [] as Json,
+      })
+      .select('id')
+      .single()
+      .returns<{ id: string }>()
+
+    if (insertError) throw new Error(insertError.message)
+
+    if (assigneeIds.length > 0) {
+      await syncTaskAssignees(row.id, assigneeIds)
+    }
+
+    return fetchTaskById(row.id, boardId)
+  }, 'Не удалось создать задачу.')
 }
 
 export async function updateTask(payload: UpdateTaskPayload): Promise<BoardTask> {
-  const {
-    taskId,
-    boardId,
-    title,
-    priority = 'medium',
-    description = null,
-    dueAt = null,
-    assigneeIds = [],
-  } = payload
+  return unwrapResult(await updateTaskResult(payload))
+}
 
-  const { error: updateError } = await supabase
-    .from('tasks')
-    .update({
+export async function updateTaskResult(payload: UpdateTaskPayload): Promise<Result<BoardTask>> {
+  return toResult(async () => {
+    const {
+      taskId,
+      boardId,
       title,
-      priority,
-      description,
-      due_at: dueAt,
-    })
-    .eq('id', taskId)
-    .eq('board_id', boardId)
+      priority = 'medium',
+      description = null,
+      dueAt = null,
+      assigneeIds = [],
+    } = payload
 
-  if (updateError) throw new Error(updateError.message)
+    if (isPythonApiEnabled()) {
+      return apiRequest<BoardTask>(`/tasks/${taskId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          boardId,
+          title,
+          priority,
+          description,
+          dueAt,
+          assigneeIds,
+        }),
+      })
+    }
 
-  await syncTaskAssignees(taskId, assigneeIds)
+    const { error: updateError } = await supabase
+      .from('tasks')
+      .update({
+        title,
+        priority,
+        description,
+        due_at: dueAt,
+      })
+      .eq('id', taskId)
+      .eq('board_id', boardId)
 
-  return fetchTaskById(taskId, boardId)
+    if (updateError) throw new Error(updateError.message)
+
+    await syncTaskAssignees(taskId, assigneeIds)
+
+    return fetchTaskById(taskId, boardId)
+  }, 'Не удалось обновить задачу.')
 }
 
 export async function deleteTask(
@@ -570,15 +707,35 @@ export async function deleteTask(
   status: TaskStatus,
   remainingTaskIds: string[],
 ): Promise<void> {
-  const { error: deleteError } = await supabase
-    .from('tasks')
-    .delete()
-    .eq('id', taskId)
-    .eq('board_id', boardId)
+  await unwrapResult(await deleteTaskResult(taskId, boardId, columnId, status, remainingTaskIds))
+}
 
-  if (deleteError) throw new Error(deleteError.message)
+export async function deleteTaskResult(
+  taskId: string,
+  boardId: string,
+  columnId: string,
+  status: TaskStatus,
+  remainingTaskIds: string[],
+): Promise<Result<void>> {
+  return toResult(async () => {
+    if (isPythonApiEnabled()) {
+      await apiRequest<void>(`/tasks/${taskId}`, {
+        method: 'DELETE',
+        body: JSON.stringify({ boardId, columnId, status, remainingTaskIds }),
+      })
+      return
+    }
 
-  await normalizeColumnPositions(boardId, columnId, status, remainingTaskIds)
+    const { error: deleteError } = await supabase
+      .from('tasks')
+      .delete()
+      .eq('id', taskId)
+      .eq('board_id', boardId)
+
+    if (deleteError) throw new Error(deleteError.message)
+
+    await normalizeColumnPositions(boardId, columnId, status, remainingTaskIds)
+  }, 'Не удалось удалить задачу.')
 }
 
 export async function deleteTasks(
@@ -586,66 +743,101 @@ export async function deleteTasks(
   taskIds: string[],
   columns: BoardViewColumn[],
 ): Promise<void> {
-  if (taskIds.length === 0) return
+  await unwrapResult(await deleteTasksResult(boardId, taskIds, columns))
+}
 
-  const idsToDelete = new Set(taskIds)
+export async function deleteTasksResult(
+  boardId: string,
+  taskIds: string[],
+  columns: BoardViewColumn[],
+): Promise<Result<void>> {
+  return toResult(async () => {
+    if (taskIds.length === 0) return
 
-  const { error: deleteError } = await supabase
-    .from('tasks')
-    .delete()
-    .eq('board_id', boardId)
-    .in('id', [...idsToDelete])
-
-  if (deleteError) throw new Error(deleteError.message)
-
-  const affectedColumnIds = new Set<string>()
-  for (const column of columns) {
-    if (column.tasks.some((task) => idsToDelete.has(task.id))) {
-      affectedColumnIds.add(column.id)
+    if (isPythonApiEnabled()) {
+      await apiRequest<void>('/tasks/bulk-delete', {
+        method: 'POST',
+        body: JSON.stringify({ boardId, taskIds, columns }),
+      })
+      return
     }
-  }
 
-  for (const columnId of affectedColumnIds) {
-    const column = columns.find((item) => item.id === columnId)
-    if (!column) continue
+    const idsToDelete = new Set(taskIds)
 
-    const remainingTaskIds = column.tasks
-      .filter((task) => !idsToDelete.has(task.id))
-      .map((task) => task.id)
+    const { error: deleteError } = await supabase
+      .from('tasks')
+      .delete()
+      .eq('board_id', boardId)
+      .in('id', [...idsToDelete])
 
-    await normalizeColumnPositions(boardId, columnId, column.statusKey, remainingTaskIds)
-  }
+    if (deleteError) throw new Error(deleteError.message)
+
+    const affectedColumnIds = new Set<string>()
+    for (const column of columns) {
+      if (column.tasks.some((task) => idsToDelete.has(task.id))) {
+        affectedColumnIds.add(column.id)
+      }
+    }
+
+    for (const columnId of affectedColumnIds) {
+      const column = columns.find((item) => item.id === columnId)
+      if (!column) continue
+
+      const remainingTaskIds = column.tasks
+        .filter((task) => !idsToDelete.has(task.id))
+        .map((task) => task.id)
+
+      await normalizeColumnPositions(boardId, columnId, column.statusKey, remainingTaskIds)
+    }
+  }, 'Не удалось удалить задачи.')
 }
 
 export async function syncTaskAssignees(taskId: string, assigneeIds: string[]): Promise<void> {
-  const { data: existingRows, error: existingError } = await supabase
-    .from('task_assignees')
-    .select('profile_id')
-    .eq('task_id', taskId)
-    .returns<Array<{ profile_id: string }>>()
+  await unwrapResult(await syncTaskAssigneesResult(taskId, assigneeIds))
+}
 
-  if (existingError) throw new Error(existingError.message)
+export async function syncTaskAssigneesResult(
+  taskId: string,
+  assigneeIds: string[],
+): Promise<Result<void>> {
+  return toResult(async () => {
+    if (isPythonApiEnabled()) {
+      await apiRequest<void>(`/tasks/${taskId}/assignees/sync`, {
+        method: 'POST',
+        body: JSON.stringify({ assigneeIds }),
+      })
+      return
+    }
 
-  const existingIds = new Set((existingRows ?? []).map((row) => row.profile_id))
-  const nextIds = new Set(assigneeIds)
-
-  const toDelete = [...existingIds].filter((id) => !nextIds.has(id))
-  const toInsert = [...nextIds]
-    .filter((id) => !existingIds.has(id))
-    .map((profileId) => ({ task_id: taskId, profile_id: profileId }))
-
-  if (toDelete.length > 0) {
-    const { error: deleteError } = await supabase
+    const { data: existingRows, error: existingError } = await supabase
       .from('task_assignees')
-      .delete()
+      .select('profile_id')
       .eq('task_id', taskId)
-      .in('profile_id', toDelete)
+      .returns<Array<{ profile_id: string }>>()
 
-    if (deleteError) throw new Error(deleteError.message)
-  }
+    if (existingError) throw new Error(existingError.message)
 
-  if (toInsert.length > 0) {
-    const { error: insertError } = await supabase.from('task_assignees').insert(toInsert)
-    if (insertError) throw new Error(insertError.message)
-  }
+    const existingIds = new Set((existingRows ?? []).map((row) => row.profile_id))
+    const nextIds = new Set(assigneeIds)
+
+    const toDelete = [...existingIds].filter((id) => !nextIds.has(id))
+    const toInsert = [...nextIds]
+      .filter((id) => !existingIds.has(id))
+      .map((profileId) => ({ task_id: taskId, profile_id: profileId }))
+
+    if (toDelete.length > 0) {
+      const { error: deleteError } = await supabase
+        .from('task_assignees')
+        .delete()
+        .eq('task_id', taskId)
+        .in('profile_id', toDelete)
+
+      if (deleteError) throw new Error(deleteError.message)
+    }
+
+    if (toInsert.length > 0) {
+      const { error: insertError } = await supabase.from('task_assignees').insert(toInsert)
+      if (insertError) throw new Error(insertError.message)
+    }
+  }, 'Не удалось обновить исполнителей задачи.')
 }
